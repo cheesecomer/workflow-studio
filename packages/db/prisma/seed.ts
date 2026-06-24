@@ -1,14 +1,14 @@
-import { WorkflowStudioPrismaClient } from "../src/index.js";
+import { WorkflowStudioPrismaClient } from '../src/index.js';
 
 const prisma = new WorkflowStudioPrismaClient();
 
 async function main() {
   await prisma.position.createMany({
     data: [
-      { name: "社員", rank: 10 },
-      { name: "主任", rank: 20 },
-      { name: "課長", rank: 30 },
-      { name: "部長", rank: 40 },
+      { name: '社員', rank: 10 },
+      { name: '主任', rank: 20 },
+      { name: '課長', rank: 30 },
+      { name: '部長', rank: 40 },
     ],
   });
 
@@ -17,28 +17,28 @@ async function main() {
   });
 
   const headquarters = await prisma.department.create({
-    data: { name: "本部" },
+    data: { name: '本部' },
   });
 
   const developmentDepartment = await prisma.department.create({
     data: {
-      name: "開発部",
+      name: '開発部',
       parentId: headquarters.id,
     },
   });
 
   await prisma.department.create({
     data: {
-      name: "営業部",
+      name: '営業部',
       parentId: headquarters.id,
     },
   });
 
   const admin = await prisma.user.create({
     data: {
-      name: "管理者",
-      email: "admin@example.com",
-      passwordDigest: "dummy",
+      name: '管理者',
+      email: 'admin@example.com',
+      passwordDigest: 'dummy',
     },
   });
 
@@ -51,7 +51,7 @@ async function main() {
     },
   });
 
-  console.log("Seed completed");
+  console.log('Seed completed');
 }
 
 main()

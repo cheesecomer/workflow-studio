@@ -1,6 +1,6 @@
 services:
   web:
-    image: node:22-slim
+    build: .
     working_dir: /app
     volumes:
       - .:/app
@@ -12,13 +12,13 @@ services:
       PATH: /pnpm:$PATH
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       NEXT_PUBLIC_API_URL: http://api:3000
-    command: sh -c "corepack enable && pnpm --filter web dev --hostname 0.0.0.0"
+    command: sh -c "pnpm --filter web dev --hostname 0.0.0.0"
     depends_on:
       api:
         condition: service_healthy
 
   api:
-    image: node:22-slim
+    build: .
     working_dir: /app
     volumes:
       - .:/app
@@ -30,7 +30,7 @@ services:
       PATH: /pnpm:$PATH
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       DATABASE_URL: postgresql://postgres:postgres@db:5432/workflow_studio
-    command: sh -c "corepack enable && pnpm install && pnpm db:generate && pnpm db:build && pnpm --filter api start:dev"
+    command: sh -c "pnpm install && pnpm db:generate && pnpm db:build && pnpm --filter api start:dev"
     healthcheck:
       test:
         [
