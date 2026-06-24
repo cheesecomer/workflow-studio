@@ -1,0 +1,57 @@
+services:
+  web:
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+      - pnpm-store:/pnpm/store
+    ports:
+      - "3100:3000"
+    environment:
+      PNPM_HOME: /pnpm
+      PATH: /pnpm:$PATH
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      NEXT_PUBLIC_API_URL: http://api:3000
+    command: sh -c "corepack enable && pnpm --filter web dev --hostname 0.0.0.0"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+      - pnpm-store:/pnpm/store
+    environment:
+      PNPM_HOME: /pnpm
+      PATH: /pnpm:$PATH
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/workflow_studio
+    command: sh -c "corepack enable && pnpm install && pnpm --filter api start:dev"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      - db
+
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: workflow_studio
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
+  pnpm-store:
