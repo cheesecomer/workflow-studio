@@ -1,11 +1,24 @@
 {
   "name": "@workflow-studio/db",
   "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "devDependencies": {
+    "tsx": "^4.20.0",
+    "@types/pg": "^8.20.0",
     "dotenv": "^17.4.2",
     "prisma": "^7.8.0"
   },
   "dependencies": {
-    "@prisma/client": "^7.8.0"
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "pg": "^8.22.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "reset": "prisma migrate reset --force",
+    "seed": "tsx prisma/seed.ts"
   }
 }

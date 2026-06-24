@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:build": "pnpm --filter @workflow-studio/db build",
+    "db:generate": "pnpm --filter @workflow-studio/db generate",
+    "db:migrate": "pnpm --filter @workflow-studio/db migrate",
+    "db:reset": "pnpm --filter @workflow-studio/db reset",
+    "db:seed": "pnpm --filter @workflow-studio/db seed"
   },
   "keywords": [],
   "author": "",

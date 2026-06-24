@@ -10,3 +10,388 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum FieldType {
+  text
+  number
+  date
+  select
+}
+
+enum ApprovalPolicyOperator {
+  all
+  any
+}
+
+enum DepartmentScope {
+  same_tree
+  same_department
+  entire_company
+}
+
+enum PositionOperator {
+  eq
+  gte
+  between
+}
+
+enum SubmissionStatus {
+  draft
+  submitted
+  approved
+  rejected
+  withdrawn
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum ApproverStatus {
+  pending
+  approved
+  rejected
+  skipped
+}
+
+enum ApprovalDecisionType {
+  approved
+  rejected
+}
+
+model Document {
+  id                          BigInt    @id @default(autoincrement())
+  name                        String
+  currentDocumentDefinitionId BigInt?   @map("current_document_definition_id")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
+
+  drafts                    DocumentDraft[]
+  definitions               DocumentDefinition[] @relation("DocumentDefinitions")
+  currentDocumentDefinition DocumentDefinition?  @relation("CurrentDocumentDefinition", fields: [currentDocumentDefinitionId], references: [id])
+
+  @@index([currentDocumentDefinitionId])
+  @@map("documents")
+}
+
+model DocumentDraft {
+  id         BigInt    @id @default(autoincrement())
+  documentId BigInt    @map("document_id")
+  content    Json
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+  @@map("document_drafts")
+}
+
+model DocumentDefinition {
+  id            BigInt    @id @default(autoincrement())
+  documentId    BigInt    @map("document_id")
+  version       Int
+  name          String
+  publishedById BigInt    @map("published_by_id")
+  publishedAt   DateTime  @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  document            Document   @relation("DocumentDefinitions", fields: [documentId], references: [id])
+  currentForDocuments Document[] @relation("CurrentDocumentDefinition")
+  publishedBy         User       @relation("PublishedDocumentDefinitions", fields: [publishedById], references: [id])
+
+  fieldDefinitions FieldDefinition[]
+  approvalPolicies ApprovalPolicy[]
+  submissions      Submission[]
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@index([publishedById])
+  @@map("document_definitions")
+}
+
+model FieldDefinition {
+  id                   BigInt    @id @default(autoincrement())
+  documentDefinitionId BigInt    @map("document_definition_id")
+  key                  String
+  label                String
+  fieldType            FieldType @map("field_type")
+  required             Boolean
+  position             Int
+  settings             Json
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+
+  documentDefinition    DocumentDefinition     @relation(fields: [documentDefinitionId], references: [id])
+  submissionFieldValues SubmissionFieldValue[]
+
+  @@unique([documentDefinitionId, key])
+  @@unique([documentDefinitionId, position])
+  @@index([documentDefinitionId])
+  @@map("field_definitions")
+}
+
+model ApprovalPolicy {
+  id                   BigInt                 @id @default(autoincrement())
+  documentDefinitionId BigInt                 @map("document_definition_id")
+  name                 String
+  condition            Json?
+  operator             ApprovalPolicyOperator
+  position             Int
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  deletedAt            DateTime?              @map("deleted_at")
+
+  documentDefinition DocumentDefinition      @relation(fields: [documentDefinitionId], references: [id])
+  requirements       ApprovalRequirement[]
+  appliedPolicies    AppliedApprovalPolicy[]
+
+  @@unique([documentDefinitionId, position])
+  @@index([documentDefinitionId])
+  @@map("approval_policies")
+}
+
+model ApprovalRequirement {
+  id               BigInt           @id @default(autoincrement())
+  approvalPolicyId BigInt           @map("approval_policy_id")
+  name             String
+  departmentScope  DepartmentScope  @map("department_scope")
+  positionOperator PositionOperator @map("position_operator")
+  positionId       BigInt           @map("position_id")
+  upperPositionId  BigInt?          @map("upper_position_id")
+  requiredCount    Int              @map("required_count")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  deletedAt        DateTime?        @map("deleted_at")
+
+  approvalPolicy ApprovalPolicy @relation(fields: [approvalPolicyId], references: [id])
+  position       Position       @relation("RequirementPosition", fields: [positionId], references: [id])
+  upperPosition  Position?      @relation("RequirementUpperPosition", fields: [upperPositionId], references: [id])
+
+  appliedRequirements AppliedApprovalRequirement[]
+
+  @@index([approvalPolicyId])
+  @@index([positionId])
+  @@index([upperPositionId])
+  @@map("approval_requirements")
+}
+
+model User {
+  id             BigInt    @id @default(autoincrement())
+  name           String
+  email          String
+  passwordDigest String    @map("password_digest")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  memberships                  DepartmentMembership[]
+  publishedDocumentDefinitions DocumentDefinition[]   @relation("PublishedDocumentDefinitions")
+  createdSubmissions           Submission[]           @relation("CreatedSubmissions")
+  submittedSubmissions         Submission[]           @relation("SubmittedSubmissions")
+  approvers                    Approver[]
+  approvalDecisions            ApprovalDecision[]     @relation("ApprovalDecisionActor")
+
+  @@unique([email])
+  @@index([email])
+  @@map("users")
+}
+
+model Department {
+  id        BigInt    @id @default(autoincrement())
+  parentId  BigInt?   @map("parent_id")
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  parent      Department?            @relation("DepartmentTree", fields: [parentId], references: [id])
+  children    Department[]           @relation("DepartmentTree")
+  memberships DepartmentMembership[]
+  submissions Submission[]
+
+  @@index([parentId])
+  @@map("departments")
+}
+
+model Position {
+  id        BigInt    @id @default(autoincrement())
+  name      String
+  rank      Int
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  memberships               DepartmentMembership[]
+  approvalRequirements      ApprovalRequirement[]  @relation("RequirementPosition")
+  upperApprovalRequirements ApprovalRequirement[]  @relation("RequirementUpperPosition")
+
+  @@unique([rank])
+  @@index([rank])
+  @@map("positions")
+}
+
+model DepartmentMembership {
+  id           BigInt    @id @default(autoincrement())
+  userId       BigInt    @map("user_id")
+  departmentId BigInt    @map("department_id")
+  positionId   BigInt    @map("position_id")
+  joinedAt     DateTime  @map("joined_at")
+  leftAt       DateTime? @map("left_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  user       User       @relation(fields: [userId], references: [id])
+  department Department @relation(fields: [departmentId], references: [id])
+  position   Position   @relation(fields: [positionId], references: [id])
+
+  @@index([userId])
+  @@index([departmentId])
+  @@index([positionId])
+  @@map("department_memberships")
+}
+
+model Submission {
+  id                             BigInt           @id @default(autoincrement())
+  documentDefinitionId           BigInt           @map("document_definition_id")
+  createdById                    BigInt           @map("created_by_id")
+  submittedById                  BigInt?          @map("submitted_by_id")
+  applicantDepartmentId          BigInt?          @map("applicant_department_id")
+  status                         SubmissionStatus
+  currentAppliedApprovalPolicyId BigInt?          @map("current_applied_approval_policy_id")
+  submittedAt                    DateTime?        @map("submitted_at")
+  approvedAt                     DateTime?        @map("approved_at")
+  rejectedAt                     DateTime?        @map("rejected_at")
+  withdrawnAt                    DateTime?        @map("withdrawn_at")
+  createdAt                      DateTime         @default(now()) @map("created_at")
+  updatedAt                      DateTime         @updatedAt @map("updated_at")
+
+  documentDefinition           DocumentDefinition      @relation(fields: [documentDefinitionId], references: [id])
+  createdBy                    User                    @relation("CreatedSubmissions", fields: [createdById], references: [id])
+  submittedBy                  User?                   @relation("SubmittedSubmissions", fields: [submittedById], references: [id])
+  applicantDepartment          Department?             @relation(fields: [applicantDepartmentId], references: [id])
+  currentAppliedApprovalPolicy AppliedApprovalPolicy?  @relation("CurrentAppliedApprovalPolicy", fields: [currentAppliedApprovalPolicyId], references: [id])
+  fieldValues                  SubmissionFieldValue[]
+  appliedApprovalPolicies      AppliedApprovalPolicy[] @relation("SubmissionAppliedApprovalPolicies")
+
+  @@index([documentDefinitionId])
+  @@index([createdById])
+  @@index([submittedById])
+  @@index([status])
+  @@index([currentAppliedApprovalPolicyId])
+  @@map("submissions")
+}
+
+model SubmissionFieldValue {
+  id                BigInt   @id @default(autoincrement())
+  submissionId      BigInt   @map("submission_id")
+  fieldDefinitionId BigInt   @map("field_definition_id")
+  value             Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  submission      Submission      @relation(fields: [submissionId], references: [id])
+  fieldDefinition FieldDefinition @relation(fields: [fieldDefinitionId], references: [id])
+
+  @@unique([submissionId, fieldDefinitionId])
+  @@index([submissionId])
+  @@index([fieldDefinitionId])
+  @@map("submission_field_values")
+}
+
+model AppliedApprovalPolicy {
+  id               BigInt         @id @default(autoincrement())
+  submissionId     BigInt         @map("submission_id")
+  approvalPolicyId BigInt         @map("approval_policy_id")
+  position         Int
+  status           ApprovalStatus
+  approvedAt       DateTime?      @map("approved_at")
+  rejectedAt       DateTime?      @map("rejected_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  deletedAt        DateTime?      @map("deleted_at")
+
+  submission            Submission                   @relation("SubmissionAppliedApprovalPolicies", fields: [submissionId], references: [id])
+  currentForSubmissions Submission[]                 @relation("CurrentAppliedApprovalPolicy")
+  approvalPolicy        ApprovalPolicy               @relation(fields: [approvalPolicyId], references: [id])
+  requirements          AppliedApprovalRequirement[]
+
+  @@unique([submissionId, position])
+  @@unique([submissionId, approvalPolicyId])
+  @@index([submissionId])
+  @@index([approvalPolicyId])
+  @@index([status])
+  @@map("applied_approval_policies")
+}
+
+model AppliedApprovalRequirement {
+  id                      BigInt         @id @default(autoincrement())
+  appliedApprovalPolicyId BigInt         @map("applied_approval_policy_id")
+  approvalRequirementId   BigInt         @map("approval_requirement_id")
+  status                  ApprovalStatus
+  requiredCount           Int            @map("required_count")
+  approvedCount           Int            @map("approved_count")
+  approvedAt              DateTime?      @map("approved_at")
+  rejectedAt              DateTime?      @map("rejected_at")
+  createdAt               DateTime       @default(now()) @map("created_at")
+  updatedAt               DateTime       @updatedAt @map("updated_at")
+  deletedAt               DateTime?      @map("deleted_at")
+
+  appliedApprovalPolicy AppliedApprovalPolicy @relation(fields: [appliedApprovalPolicyId], references: [id])
+  approvalRequirement   ApprovalRequirement   @relation(fields: [approvalRequirementId], references: [id])
+  approvers             Approver[]
+
+  @@unique([appliedApprovalPolicyId, approvalRequirementId])
+  @@index([appliedApprovalPolicyId])
+  @@index([approvalRequirementId])
+  @@index([status])
+  @@map("applied_approval_requirements")
+}
+
+model Approver {
+  id                           BigInt         @id @default(autoincrement())
+  appliedApprovalRequirementId BigInt         @map("applied_approval_requirement_id")
+  userId                       BigInt         @map("user_id")
+  status                       ApproverStatus
+  decidedAt                    DateTime?      @map("decided_at")
+  createdAt                    DateTime       @default(now()) @map("created_at")
+  updatedAt                    DateTime       @updatedAt @map("updated_at")
+  deletedAt                    DateTime?      @map("deleted_at")
+
+  appliedApprovalRequirement AppliedApprovalRequirement @relation(fields: [appliedApprovalRequirementId], references: [id])
+  user                       User                       @relation(fields: [userId], references: [id])
+  decisions                  ApprovalDecision[]
+
+  @@unique([appliedApprovalRequirementId, userId])
+  @@index([appliedApprovalRequirementId])
+  @@index([userId])
+  @@index([status])
+  @@map("approvers")
+}
+
+model ApprovalDecision {
+  id         BigInt               @id @default(autoincrement())
+  approverId BigInt               @map("approver_id")
+  actorId    BigInt               @map("actor_id")
+  decision   ApprovalDecisionType
+  comment    String?
+  decidedAt  DateTime             @map("decided_at")
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+  deletedAt  DateTime?            @map("deleted_at")
+
+  approver Approver @relation(fields: [approverId], references: [id])
+  actor    User     @relation("ApprovalDecisionActor", fields: [actorId], references: [id])
+
+  @@index([approverId])
+  @@index([actorId])
+  @@map("approval_decisions")
+}

@@ -23,12 +23,14 @@ services:
     volumes:
       - .:/app
       - pnpm-store:/pnpm/store
+    ports:
+      - "3101:3000"
     environment:
       PNPM_HOME: /pnpm
       PATH: /pnpm:$PATH
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       DATABASE_URL: postgresql://postgres:postgres@db:5432/workflow_studio
-    command: sh -c "corepack enable && pnpm install && pnpm --filter api start:dev"
+    command: sh -c "corepack enable && pnpm install && pnpm db:generate && pnpm db:build && pnpm --filter api start:dev"
     healthcheck:
       test:
         [
