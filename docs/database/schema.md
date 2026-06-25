@@ -15,35 +15,26 @@
 
 申請書の論理的な親。
 
-## columns
+Document は編集中の申請書定義を `draft_content` として保持する。
 
-| column                         | type     |  null | note             |
-| ------------------------------ | -------- | ----: | ---------------- |
-| id                             | bigint   | false | PK               |
-| name                           | string   | false | 申請書名         |
-| current_document_definition_id | bigint   |  true | 現在公開中の定義 |
-| created_at                     | datetime | false |                  |
-| updated_at                     | datetime | false |                  |
-| deleted_at                     | datetime |  true | 論理削除         |
+公開時は `draft_content` から不変な `document_definitions` を生成する。
 
----
+最後に公開した内容は `published_content` として保持する。
 
-# document_drafts
-
-編集中の申請書定義。
-
-MVP では JSON として保持する。
+`published_content` は、公開済み内容との差分確認や編集内容の破棄に利用する。
 
 ## columns
 
-| column      | type     |  null | note         |
-| ----------- | -------- | ----: | ------------ |
-| id          | bigint   | false | PK           |
-| document_id | bigint   | false | FK           |
-| content     | json     | false | 編集中の定義 |
-| created_at  | datetime | false |              |
-| updated_at  | datetime | false |              |
-| deleted_at  | datetime |  true | 論理削除     |
+| column                         | type     |  null | note                     |
+| ------------------------------ | -------- | ----: | ------------------------ |
+| id                             | bigint   | false | PK                       |
+| name                           | string   | false | 申請書名                 |
+| draft_content                  | json     | false | 現在編集中の申請書定義   |
+| published_content              | json     |  true | 最後に公開した申請書定義 |
+| current_document_definition_id | bigint   |  true | 現在公開中の定義         |
+| created_at                     | datetime | false |                          |
+| updated_at                     | datetime | false |                          |
+| deleted_at                     | datetime |  true | 論理削除                 |
 
 ---
 
@@ -388,8 +379,6 @@ MVP では JSON として保持する。
 
 ```text
 documents.current_document_definition_id
-
-document_drafts.document_id
 
 document_definitions.document_id
 document_definitions.published_by_id

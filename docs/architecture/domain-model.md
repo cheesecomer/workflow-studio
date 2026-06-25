@@ -22,28 +22,55 @@
 - 備品購入申請書
 - 稟議書
 
-Document 自体は申請書の識別子として存在する。
+Document は申請書定義の編集中データを保持する。
 
-## 関連
+公開時は編集中データから不変な DocumentDefinition を生成する。
 
-- DocumentDraft
-- DocumentDefinition
+Document 自体は編集可能であり、
+DocumentDefinition は公開時点のスナップショットとして扱う。
 
----
+## 主な属性
 
-# DocumentDraft
+- name
+- draft_content
+- published_content
+- current_document_definition_id
 
-編集中の申請書定義。
+### draft_content
 
-ユーザーが編集する作業領域。
+現在編集中の申請書定義。
 
 MVP では JSON として保持する。
 
-公開時に DocumentDefinition を生成する。
+編集途中の不完全な状態を許容する。
+
+### published_content
+
+最後に公開した申請書定義。
+
+DocumentDefinition と同じ内容を、編集用 JSON として保持する。
+
+公開済み内容との差分確認や、編集内容の破棄に利用する。
+
+編集内容を破棄する場合は、
+
+```text
+draft_content = published_content
+```
+
+とする。
+
+初回公開前は null とする。
+
+### current_document_definition_id
+
+現在公開中の DocumentDefinition を指す。
+
+未公開の場合は null とする。
 
 ## 関連
 
-- Document
+- DocumentDefinition
 
 ---
 
@@ -476,7 +503,6 @@ ApprovalDecision は監査ログとして扱う。
 
 ```text
 Document
-├─ DocumentDraft
 └─ DocumentDefinition
    ├─ FieldDefinition
    └─ ApprovalPolicy

@@ -23,14 +23,15 @@
 
 ```text
 Document
-DocumentDraft
 ```
+
+この時点では公開済み定義は存在しない。
 
 ---
 
 # 2. 申請書定義の編集
 
-ユーザーは DocumentDraft を編集する。
+ユーザーは `Document.draft_content` を編集する。
 
 編集可能な内容:
 
@@ -40,19 +41,21 @@ DocumentDraft
 - 承認ポリシー追加
 - 承認要件追加
 
-MVP では DocumentDraft は JSON として保持する。
+MVP では `Document.draft_content` は編集用 JSON として保持する。
+
+編集途中の不完全な状態を許容する。
 
 ---
 
 # 3. 申請書定義の公開
 
-ユーザーは DocumentDraft を公開する。
+ユーザーは `Document.draft_content` を公開する。
 
-公開時に Draft の内容を検証し、
+公開時に `Document.draft_content` の内容を検証し、
 公開済み定義を生成する。
 
 ```text
-DocumentDraft
+Document.draft_content
  ↓
 DocumentDefinition
 ```
@@ -66,12 +69,20 @@ ApprovalPolicy
 ApprovalRequirement
 ```
 
-公開済みの DocumentDefinition は更新しない。
+同時に、
+
+```text
+Document.published_content = Document.draft_content
+```
+
+とし、最後に公開した内容を保存する。
+
+公開済みの `DocumentDefinition` は更新しない。
 
 定義変更が必要な場合は、
 
 ```text
-DocumentDraft を編集
+Document.draft_content を編集
  ↓
 新しい DocumentDefinition を生成
 ```
@@ -89,7 +100,24 @@ Document
 
 ---
 
-# 4. 申請作成
+# 4. 編集内容の破棄
+
+公開済みの内容へ戻したい場合は、
+
+```text
+Document.published_content
+ ↓
+Document.draft_content
+```
+
+とする。
+
+初回公開前は公開済み定義が存在しないため、
+編集内容の破棄はできない。
+
+---
+
+# 5. 申請作成
 
 ユーザーは公開済みの DocumentDefinition を選択し、
 申請を作成する。
@@ -111,7 +139,7 @@ SubmissionFieldValue
 
 ---
 
-# 5. 申請提出
+# 6. 申請提出
 
 ユーザーは申請を提出する。
 
@@ -127,7 +155,7 @@ submitted
 
 ---
 
-## 5-1. ApprovalPolicy の評価
+## 6-1. ApprovalPolicy の評価
 
 DocumentDefinition に定義された ApprovalPolicy を評価する。
 
@@ -161,7 +189,7 @@ Policy C
 
 ---
 
-## 5-2. AppliedApprovalPolicy の生成
+## 6-2. AppliedApprovalPolicy の生成
 
 適用された ApprovalPolicy を
 AppliedApprovalPolicy として生成する。
@@ -198,7 +226,7 @@ ApprovalPolicy.position のコピーではない。
 
 ---
 
-## 5-3. AppliedApprovalRequirement の生成
+## 6-3. AppliedApprovalRequirement の生成
 
 AppliedApprovalPolicy に含まれる ApprovalRequirement をもとに、
 AppliedApprovalRequirement を生成する。
@@ -225,7 +253,7 @@ status = pending
 
 ---
 
-## 5-4. 承認者の解決
+## 6-4. 承認者の解決
 
 ApprovalRequirement をもとに、
 承認可能な User を解決する。
@@ -285,7 +313,7 @@ required_count = 3
 
 ---
 
-## 5-5. Approver の生成
+## 6-5. Approver の生成
 
 解決した User ごとに Approver を生成する。
 
@@ -323,7 +351,7 @@ pending
 
 ---
 
-## 5-6. 現在承認中ポリシーの設定
+## 6-6. 現在承認中ポリシーの設定
 
 最初の AppliedApprovalPolicy を
 
@@ -335,13 +363,13 @@ Submission.current_applied_approval_policy_id
 
 ---
 
-# 6. 承認
+# 7. 承認
 
 承認者は申請を承認または却下する。
 
 ---
 
-## 6-1. 承認
+## 7-1. 承認
 
 承認者が承認を実行する。
 
@@ -365,7 +393,7 @@ AppliedApprovalRequirement の approved_count を更新する。
 
 ---
 
-## 6-2. 却下
+## 7-2. 却下
 
 承認者が却下を実行する。
 
@@ -390,7 +418,7 @@ MVP では、いずれかの承認者が却下した時点で
 
 ---
 
-## 6-3. AppliedApprovalRequirement の状態更新
+## 7-3. AppliedApprovalRequirement の状態更新
 
 Approver の状態変化に応じて
 AppliedApprovalRequirement を更新する。
@@ -413,7 +441,7 @@ rejected
 
 ---
 
-## 6-4. AppliedApprovalPolicy の状態更新
+## 7-4. AppliedApprovalPolicy の状態更新
 
 AppliedApprovalRequirement の状態変化に応じて
 AppliedApprovalPolicy を更新する。
@@ -454,7 +482,7 @@ ApprovalPolicy.operator は承認成立条件を表す。
 
 ---
 
-## 6-5. 次の承認ポリシーへ進む
+## 7-5. 次の承認ポリシーへ進む
 
 現在の AppliedApprovalPolicy が approved になった場合
 
@@ -476,7 +504,7 @@ Policy 3
 
 ---
 
-# 7. 承認完了
+# 8. 承認完了
 
 最後の AppliedApprovalPolicy が approved になった場合
 
@@ -498,7 +526,7 @@ Submission.current_applied_approval_policy_id = null
 
 ---
 
-# 8. 却下
+# 9. 却下
 
 いずれかの AppliedApprovalPolicy が rejected になった場合
 
@@ -520,7 +548,7 @@ Submission.current_applied_approval_policy_id = null
 
 ---
 
-# 9. 申請取り下げ
+# 10. 申請取り下げ
 
 申請者は承認中の申請を取り下げできる。
 
