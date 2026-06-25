@@ -18,7 +18,6 @@
 
 ```mermaid
 erDiagram
-    DOCUMENTS ||--o| DOCUMENT_DRAFTS : has
     DOCUMENTS ||--o{ DOCUMENT_DEFINITIONS : publishes
 
     DOCUMENT_DEFINITIONS ||--o{ FIELD_DEFINITIONS : defines

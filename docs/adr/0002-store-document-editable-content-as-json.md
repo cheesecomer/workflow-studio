@@ -1,4 +1,4 @@
-# ADR-0002: Store Document Draft as JSON
+# ADR-0002: Store Document Editable Content as JSON
 
 ## Status
 
@@ -38,42 +38,26 @@ Accepted
 保存したい
 ```
 
-また、
-
-```text
-項目A
-項目B
-項目C
-```
-
-を
-
-```text
-項目C
-項目A
-項目B
-```
-
-へ並び替えるような操作も発生する。
+また、項目や承認ポリシーの並び替えも発生する。
 
 ---
 
 # Decision
 
-DocumentDraft は JSON として保持する。
+Document は編集中の申請書定義を JSON として保持する。
 
 ```text
-DocumentDraft
- └ content(json)
+Document
+ └ draft_content(json)
 ```
 
-編集画面では JSON を更新する。
+編集画面では `draft_content` を更新する。
 
-公開時に JSON を検証し、
+公開時に `draft_content` を検証し、
 公開済み定義へ変換する。
 
 ```text
-DocumentDraft(JSON)
+Document.draft_content
 
 ↓
 
@@ -83,9 +67,25 @@ ApprovalPolicy
 ApprovalRequirement
 ```
 
+同時に、最後に公開した内容を `published_content` として保持する。
+
+```text
+Document.published_content = Document.draft_content
+```
+
+`published_content` は、公開済み内容との差分確認や編集内容の破棄に利用する。
+
+編集内容を破棄する場合は、
+
+```text
+Document.draft_content = Document.published_content
+```
+
+とする。
+
 公開済みデータは正規化されたテーブルとして保持する。
 
-編集中データのみ JSON を利用する。
+編集中データと最後に公開した内容は JSON として保持する。
 
 ---
 
@@ -105,9 +105,14 @@ ApprovalRequirement
 
 項目や承認ポリシーの順序変更を簡単に扱える。
 
-### スキーマ変更に強い
+### 編集内容の破棄が容易
 
-Draft 用テーブルのマイグレーションを頻繁に行う必要がない。
+`published_content` を `draft_content` に戻すだけで、
+最後に公開した状態へ戻せる。
+
+### 公開済み内容の再構築が不要
+
+公開後の編集開始時に、正規化済みテーブルから編集用 JSON を組み立て直す必要がない。
 
 ---
 
@@ -123,18 +128,43 @@ Draft 保存時点では不正な状態が存在する。
 
 JSON 内部の検索や集計は困難である。
 
-ただし Draft は編集作業領域であり、
-検索要件はないため許容する。
+ただし、編集用データは検索対象ではないため許容する。
 
 ### 型安全性が低い
 
 正規化テーブルと比較すると構造保証が弱い。
 
-ただし Draft は一時データとして扱う。
+ただし、公開済みデータは正規化テーブルとして保持する。
+
+### データが重複する
+
+公開済み定義は、`published_content` と正規化済みテーブルの両方に保持される。
+
+ただし、`published_content` は編集画面用の復元・差分確認・編集破棄を単純にするためのコピーとして許容する。
 
 ---
 
 # Alternatives Considered
+
+## Draft 用テーブルを分ける
+
+### 内容
+
+Document とは別に DocumentDraft テーブルを作成する。
+
+```text
+DocumentDraft
+ └ content(json)
+```
+
+### 不採用理由
+
+Document と Draft が常に 1:1 であり、
+公開後も Draft を保持するため、別テーブルにする利点が小さい。
+
+Document に編集用 JSON を持たせる方が単純である。
+
+---
 
 ## Draft も正規化テーブルで管理する
 
