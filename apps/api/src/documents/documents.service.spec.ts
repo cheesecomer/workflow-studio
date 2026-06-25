@@ -2,9 +2,32 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentsService } from './documents.service';
+import { PublishDocumentDto } from './dto/publish-document.dto';
+import { Prisma } from '@workflow-studio/db';
 
 describe('DocumentsService', () => {
   let service: DocumentsService;
+
+  const tx = {
+    document: {
+      findFirst: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      update: jest.fn(),
+    },
+    documentDefinition: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+    fieldDefinition: {
+      createMany: jest.fn(),
+    },
+    approvalPolicy: {
+      create: jest.fn(),
+    },
+    approvalRequirement: {
+      createMany: jest.fn(),
+    },
+  };
 
   const prisma = {
     document: {
@@ -14,6 +37,9 @@ describe('DocumentsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
+      callback(tx),
+    ),
   };
 
   const documentId = 1n;
@@ -181,6 +207,191 @@ describe('DocumentsService', () => {
       );
 
       expect(prisma.document.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('publish', () => {
+    const id = 1n;
+    const publishedById = 10n;
+
+    const dto: PublishDocumentDto = {
+      name: 'Updated Expense Request',
+      draftContent: {
+        fields: [
+          {
+            key: 'price',
+            label: '申請額',
+            fieldType: 'number',
+            required: true,
+            settings: { min: 1 },
+          },
+        ],
+        workflow: {
+          policies: [
+            {
+              name: 'Example Policy',
+              condition: null,
+              operator: 'all',
+              requirements: [
+                {
+                  name: 'Require 3 users',
+                  departmentScope: 'same_tree',
+                  positionOperator: 'eq',
+                  positionId: 1n,
+                  upperPositionId: null,
+                  requiredCount: 3,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const document = {
+      id,
+      name: 'Expense Request',
+      draftContent: {},
+      publishedContent: null,
+      currentDocumentDefinitionId: null,
+    };
+
+    const documentDefinition = {
+      id: 100n,
+      documentId: id,
+      version: 1,
+      name: dto.name,
+      publishedById,
+      publishedAt: new Date('2026-06-25T00:00:00.000Z'),
+    };
+
+    it('creates published document definition, fields, approval policies and requirements', async () => {
+      tx.document.findFirst.mockResolvedValue(document);
+      tx.documentDefinition.findFirst.mockResolvedValue(null);
+      tx.documentDefinition.create.mockResolvedValue(documentDefinition);
+      tx.approvalPolicy.create.mockResolvedValue({
+        id: 200n,
+        documentDefinitionId: documentDefinition.id,
+      });
+      tx.document.update.mockResolvedValue({
+        ...document,
+        name: dto.name,
+        draftContent: dto.draftContent,
+        publishedContent: dto.draftContent,
+        currentDocumentDefinitionId: documentDefinition.id,
+      });
+
+      await service.publish(id, dto, publishedById);
+
+      expect(tx.documentDefinition.create).toHaveBeenCalledWith({
+        data: {
+          documentId: id,
+          version: 1,
+          name: dto.name,
+          publishedById,
+        },
+      });
+
+      expect(tx.fieldDefinition.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            documentDefinitionId: documentDefinition.id,
+            key: 'price',
+            label: '申請額',
+            fieldType: 'number',
+            required: true,
+            position: 1,
+            settings: { min: 1 },
+          },
+        ],
+      });
+
+      expect(tx.approvalPolicy.create).toHaveBeenCalledWith({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          name: 'Example Policy',
+          condition: Prisma.JsonNull,
+          operator: 'all',
+          position: 1,
+          requirements: {
+            createMany: {
+              data: [
+                {
+                  name: 'Require 3 users',
+                  departmentScope: 'same_tree',
+                  positionOperator: 'eq',
+                  positionId: 1n,
+                  upperPositionId: null,
+                  requiredCount: 3,
+                },
+              ],
+            },
+          },
+        },
+      });
+    });
+
+    it('updates document after publish', async () => {
+      tx.document.findFirst.mockResolvedValue(document);
+      tx.documentDefinition.findFirst.mockResolvedValue(null);
+      tx.documentDefinition.create.mockResolvedValue(documentDefinition);
+      tx.approvalPolicy.create.mockResolvedValue({ id: 200n });
+      tx.document.update.mockResolvedValue({
+        ...document,
+        name: dto.name,
+        draftContent: dto.draftContent,
+        publishedContent: dto.draftContent,
+        currentDocumentDefinitionId: documentDefinition.id,
+      });
+
+      await service.publish(id, dto, publishedById);
+
+      expect(tx.document.update).toHaveBeenCalledWith({
+        where: { id },
+        data: {
+          name: dto.name,
+          draftContent: dto.draftContent,
+          publishedContent: dto.draftContent,
+          currentDocumentDefinitionId: documentDefinition.id,
+        },
+      });
+    });
+
+    it('increments version when document already has definitions', async () => {
+      tx.document.findFirst.mockResolvedValue(document);
+      tx.documentDefinition.findFirst.mockResolvedValue({
+        id: 99n,
+        documentId: id,
+        version: 1,
+      });
+      tx.documentDefinition.create.mockResolvedValue({
+        ...documentDefinition,
+        version: 2,
+      });
+      tx.approvalPolicy.create.mockResolvedValue({ id: 200n });
+      tx.document.update.mockResolvedValue(document);
+
+      await service.publish(id, dto, publishedById);
+
+      expect(tx.documentDefinition.create).toHaveBeenCalledWith({
+        data: {
+          documentId: id,
+          version: 2,
+          name: dto.name,
+          publishedById,
+        },
+      });
+    });
+
+    it('throws NotFoundException when document does not exist', async () => {
+      tx.document.findFirst.mockResolvedValue(null);
+
+      await expect(service.publish(id, dto, publishedById)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(tx.documentDefinition.create).not.toHaveBeenCalled();
+      expect(tx.document.update).not.toHaveBeenCalled();
     });
   });
 });

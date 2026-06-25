@@ -4,6 +4,7 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
+import { PublishDocumentDto } from './dto/publish-document.dto';
 
 describe('DocumentsController', () => {
   let controller: DocumentsController;
@@ -14,10 +15,11 @@ describe('DocumentsController', () => {
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    publish: jest.fn(),
   };
 
   const currentUser: CurrentUser = {
-    id: 1n,
+    id: 1000n,
     email: 'dev@example.com',
     name: 'Dev User',
   };
@@ -77,9 +79,7 @@ describe('DocumentsController', () => {
     it('delegates to service with current user id, document id and dto', async () => {
       const dto: UpdateDocumentDto = {
         name: 'Updated Expense Request',
-        draftContent: {
-          fields: [],
-        },
+        draftContent: {},
       };
 
       await controller.update(currentUser, 1n, dto);
@@ -93,6 +93,51 @@ describe('DocumentsController', () => {
       await controller.remove(currentUser, 1n);
 
       expect(documentsService.remove).toHaveBeenCalledWith(1n);
+    });
+  });
+
+  describe('publish', () => {
+    it('delegates to service with current user id, document id and dto', async () => {
+      const dto: PublishDocumentDto = {
+        name: 'Updated Expense Request',
+        draftContent: {
+          fields: [
+            {
+              key: 'price',
+              label: '申請額',
+              fieldType: 'number',
+              required: true,
+              settings: {},
+            },
+          ],
+          workflow: {
+            policies: [
+              {
+                name: 'Example Policy',
+                condition: null,
+                operator: 'all',
+                requirements: [
+                  {
+                    name: 'Require 3 users',
+                    departmentScope: 'same_tree',
+                    positionOperator: 'eq',
+                    positionId: 1n,
+                    requiredCount: 3,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      };
+
+      await controller.publish(currentUser, 1n, dto);
+
+      expect(documentsService.publish).toHaveBeenCalledWith(
+        1n,
+        dto,
+        currentUser.id,
+      );
     });
   });
 });
