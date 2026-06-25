@@ -75,4 +75,156 @@ describe('DocumentsController (e2e)', () => {
       .get(`/documents/${documentId}`)
       .expect(404);
   });
+  it('publishes a document', async () => {
+    type PublishResponse = {
+      id: string;
+      name: string;
+      publishedContent: Record<string, unknown>;
+      currentDocumentDefinitionId: string;
+    };
+
+    const createResponse = await request(app.getHttpServer())
+      .post('/documents')
+      .send({
+        name: 'Expense Request',
+        draftContent: {
+          fields: [],
+        },
+      })
+      .expect(201);
+
+    const documentId = (createResponse.body as { id: string }).id;
+
+    await request(app.getHttpServer())
+      .post(`/documents/${documentId}/publish`)
+      .send({
+        name: 'Updated Expense Request',
+        draftContent: {
+          fields: [
+            {
+              key: 'price',
+              label: '申請額',
+              fieldType: 'number',
+              required: true,
+              settings: {},
+            },
+          ],
+          workflow: {
+            policies: [
+              {
+                name: 'Example Policy',
+                condition: null,
+                operator: 'all',
+                requirements: [
+                  {
+                    name: 'Require 3 users',
+                    departmentScope: 'same_tree',
+                    positionOperator: 'eq',
+                    positionId: '1',
+                    upperPositionId: null,
+                    requiredCount: 3,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+      .expect(201)
+      .expect(({ body }: { body: PublishResponse }) => {
+        expect(body.id).toBe(documentId);
+        expect(body.name).toBe('Updated Expense Request');
+        expect(body.currentDocumentDefinitionId).toBeDefined();
+        expect(body.publishedContent).toEqual({
+          fields: [
+            {
+              key: 'price',
+              label: '申請額',
+              fieldType: 'number',
+              required: true,
+              settings: {},
+            },
+          ],
+          workflow: {
+            policies: [
+              {
+                name: 'Example Policy',
+                condition: null,
+                operator: 'all',
+                requirements: [
+                  {
+                    name: 'Require 3 users',
+                    departmentScope: 'same_tree',
+                    positionOperator: 'eq',
+                    positionId: '1',
+                    upperPositionId: null,
+                    requiredCount: 3,
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      });
+
+    const document = await prisma.document.findUniqueOrThrow({
+      where: { id: BigInt(documentId) },
+      include: {
+        currentDocumentDefinition: {
+          include: {
+            fieldDefinitions: true,
+            approvalPolicies: {
+              include: {
+                requirements: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(document.currentDocumentDefinition).toMatchObject({
+      version: 1,
+      name: 'Updated Expense Request',
+    });
+
+    expect(document.currentDocumentDefinition?.fieldDefinitions).toHaveLength(
+      1,
+    );
+    expect(
+      document.currentDocumentDefinition?.fieldDefinitions[0],
+    ).toMatchObject({
+      key: 'price',
+      label: '申請額',
+      fieldType: 'number',
+      required: true,
+      position: 1,
+      settings: {},
+    });
+
+    expect(document.currentDocumentDefinition?.approvalPolicies).toHaveLength(
+      1,
+    );
+    expect(
+      document.currentDocumentDefinition?.approvalPolicies[0],
+    ).toMatchObject({
+      name: 'Example Policy',
+      operator: 'all',
+      position: 1,
+    });
+
+    expect(
+      document.currentDocumentDefinition?.approvalPolicies[0].requirements,
+    ).toHaveLength(1);
+    expect(
+      document.currentDocumentDefinition?.approvalPolicies[0].requirements[0],
+    ).toMatchObject({
+      name: 'Require 3 users',
+      departmentScope: 'same_tree',
+      positionOperator: 'eq',
+      positionId: 1n,
+      upperPositionId: null,
+      requiredCount: 3,
+    });
+  });
 });

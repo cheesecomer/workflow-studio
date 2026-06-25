@@ -12,6 +12,7 @@ import type { CurrentUser } from '../auth/current-user';
 import { CurrentUser as CurrentUserDecorator } from '../auth/current-user.decorator';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CreateDocumentDto } from './dto/create-document.dto';
+import { PublishDocumentDto } from './dto/publish-document.dto';
 
 @Controller('documents')
 export class DocumentsController {
@@ -57,5 +58,13 @@ export class DocumentsController {
     void user;
 
     return this.documentsService.remove(id);
+  }
+  @Post(':id/publish')
+  publish(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Param('id') id: bigint,
+    @Body() dto: PublishDocumentDto,
+  ) {
+    return this.documentsService.publish(id, dto, user.id);
   }
 }
