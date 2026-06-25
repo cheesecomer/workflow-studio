@@ -8,6 +8,24 @@ jobs:
   quality:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: workflow_studio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d workflow_studio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/workflow_studio
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +42,10 @@ jobs:
 
       - run: pnpm db:build
 
+      - run: pnpm db:migrate
+
+      - run: pnpm db:seed
+
       - run: pnpm lint
 
       - run: pnpm typecheck
@@ -31,3 +53,5 @@ jobs:
       - run: pnpm test
 
       - run: pnpm test:cov
+
+      - run: pnpm --filter api test:e2e
