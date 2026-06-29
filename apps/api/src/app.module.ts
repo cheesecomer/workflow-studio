@@ -4,9 +4,10 @@ import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
 import { DevUserMiddleware } from './auth/dev-user.middleware';
 import { DocumentsModule } from './documents/documents.module';
+import { SubmissionsModule } from './submissions/submissions.module';
 
 @Module({
-  imports: [DocumentsModule],
+  imports: [DocumentsModule, SubmissionsModule],
   controllers: [AppController],
   providers: [AppService, PrismaService, DevUserMiddleware],
 })
