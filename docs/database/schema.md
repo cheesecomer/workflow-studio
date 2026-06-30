@@ -64,30 +64,75 @@ Document は編集中の申請書定義を `draft_content` として保持する
 
 ---
 
+# field_group_definitions
+
+申請書に含まれる入力項目グループの定義。
+
+## columns
+
+| column                 | type     | null  | note           |
+| ---------------------- | -------- | ----- | -------------- |
+| id                     | bigint   | false | PK             |
+| document_definition_id | bigint   | false | FK             |
+| key                    | string   | false | グループキー   |
+| label                  | string   | false | 表示名         |
+| repeatable             | boolean  | false | 明細グループか |
+| min_rows               | integer  | false | 最小行数       |
+| max_rows               | integer  | true  | 最大行数       |
+| position               | integer  | false | 表示順         |
+| created_at             | datetime | false |                |
+| updated_at             | datetime | false |                |
+| deleted_at             | datetime | true  | 論理削除       |
+
+### key
+
+システム内部で利用する安定した識別子。
+
+ユーザーが直接入力する値ではなく、作成時にシステムが自動生成する。
+
+label は表示名として利用し、ユーザーによる変更を許容する。
+key は一度作成したら変更しない。
+
+## constraints
+
+- `document_definition_id, key` は一意
+- `document_definition_id, position` は一意
+
+---
+
 # field_definitions
 
 申請書に含まれる入力項目の定義。
 
 ## columns
 
-| column                 | type     |  null | note                               |
-| ---------------------- | -------- | ----: | ---------------------------------- |
-| id                     | bigint   | false | PK                                 |
-| document_definition_id | bigint   | false | FK                                 |
-| key                    | string   | false | 項目キー                           |
-| label                  | string   | false | 表示名                             |
-| field_type             | string   | false | text / number / date / select など |
-| required               | boolean  | false | 必須                               |
-| position               | integer  | false | 表示順                             |
-| settings               | json     | false | 選択肢・制約など                   |
-| created_at             | datetime | false |                                    |
-| updated_at             | datetime | false |                                    |
-| deleted_at             | datetime |  true | 論理削除                           |
+| column                    | type     |  null | note                               |
+| ------------------------- | -------- | ----: | ---------------------------------- |
+| id                        | bigint   | false | PK                                 |
+| field_group_definition_id | bigint   | false | FK                                 |
+| key                       | string   | false | 項目キー                           |
+| label                     | string   | false | 表示名                             |
+| field_type                | string   | false | text / number / date / select など |
+| required                  | boolean  | false | 必須                               |
+| position                  | integer  | false | 表示順                             |
+| settings                  | json     | false | 選択肢・制約など                   |
+| created_at                | datetime | false |                                    |
+| updated_at                | datetime | false |                                    |
+| deleted_at                | datetime |  true | 論理削除                           |
+
+### key
+
+システム内部で利用する安定した識別子。
+
+ユーザーが直接入力する値ではなく、作成時にシステムが自動生成する。
+
+label は表示名として利用し、ユーザーによる変更を許容する。
+key は一度作成したら変更しない。
 
 ## constraints
 
-- `document_definition_id, key` は一意
-- `document_definition_id, position` は一意
+- `field_group_definition_id, key` は一意
+- `field_group_definition_id, position` は一意
 
 ---
 
@@ -251,24 +296,45 @@ Document は編集中の申請書定義を `draft_content` として保持する
 
 ---
 
+# submission_field_group_rows
+
+申請時に入力された入力項目グループの1行。
+
+## columns
+
+| column                    | type     | null  | note             |
+| ------------------------- | -------- | ----- | ---------------- |
+| id                        | bigint   | false | PK               |
+| submission_id             | bigint   | false | FK               |
+| field_group_definition_id | bigint   | false | FK               |
+| position                  | integer  | false | グループ内の行順 |
+| created_at                | datetime | false |                  |
+| updated_at                | datetime | false |                  |
+
+## constraints
+
+- `submission_id, field_group_definition_id, position` は一意
+
+---
+
 # submission_field_values
 
 申請時に入力された値。
 
 ## columns
 
-| column              | type     |  null | note   |
-| ------------------- | -------- | ----: | ------ |
-| id                  | bigint   | false | PK     |
-| submission_id       | bigint   | false | FK     |
-| field_definition_id | bigint   | false | FK     |
-| value               | json     |  true | 入力値 |
-| created_at          | datetime | false |        |
-| updated_at          | datetime | false |        |
+| column                        | type     |  null | note   |
+| ----------------------------- | -------- | ----: | ------ |
+| id                            | bigint   | false | PK     |
+| submission_field_group_row_id | bigint   | false | FK     |
+| field_definition_id           | bigint   | false | FK     |
+| value                         | json     |  true | 入力値 |
+| created_at                    | datetime | false |        |
+| updated_at                    | datetime | false |        |
 
 ## constraints
 
-- `submission_id, field_definition_id` は一意
+- `submission_field_group_row_id, field_definition_id` は一意
 
 ---
 
@@ -383,7 +449,9 @@ documents.current_document_definition_id
 document_definitions.document_id
 document_definitions.published_by_id
 
-field_definitions.document_definition_id
+field_group_definitions.document_definition_id
+
+field_definitions.field_group_definition_id
 
 approval_policies.document_definition_id
 
@@ -407,7 +475,10 @@ submissions.submitted_by_id
 submissions.status
 submissions.current_applied_approval_policy_id
 
-submission_field_values.submission_id
+submission_field_group_rows.submission_id
+submission_field_group_rows.field_group_definition_id
+
+submission_field_values.submission_field_group_row_id
 submission_field_values.field_definition_id
 
 applied_approval_policies.submission_id
@@ -472,6 +543,7 @@ approval_decisions.actor_id
 
 # MVP では扱わないもの
 
+- 入れ子構造の入力項目グループの定義
 - 入れ子構造の承認要件
 - 承認者の再割当
 - 代理承認

@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,6 +16,10 @@ describe('SubmissionsService', () => {
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
+    submissionFieldGroupRow: {
+      create: jest.fn(),
+      deleteMany: jest.fn(),
+    },
     submissionFieldValue: {
       deleteMany: jest.fn(),
     },
@@ -23,11 +27,12 @@ describe('SubmissionsService', () => {
 
   const prisma = {
     submission: {
-      create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
-      update: jest.fn(),
       delete: jest.fn(),
+    },
+    fieldGroupDefinition: {
+      findMany: jest.fn(),
     },
     $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
       callback(tx),
@@ -37,11 +42,11 @@ describe('SubmissionsService', () => {
   const userId = 100n;
 
   const submission = {
-    id: 1n,
+    id: 111n,
     documentDefinitionId: 10n,
     createdById: userId,
     status: 'draft',
-    fieldValues: {
+    fieldGroupRows: {
       amount: 3000,
       reason: '交通費',
     },
@@ -67,26 +72,47 @@ describe('SubmissionsService', () => {
 
   describe('create', () => {
     it('creates a draft submission', async () => {
-      prisma.submission.create.mockResolvedValue(submission);
+      tx.submission.create.mockResolvedValue(submission);
+      prisma.submission.findUnique.mockResolvedValue(submission);
+      prisma.fieldGroupDefinition.findMany.mockResolvedValue([
+        {
+          id: 1n,
+          fieldDefinitions: [{ id: 1n }, { id: 2n }],
+        },
+      ]);
 
       await expect(
         service.create(
           {
             documentDefinitionId: 10n,
-            fieldValues: [
-              { fieldDefinitionId: 1n, value: 3000 },
-              { fieldDefinitionId: 2n, value: '交通費' },
+            fieldGroupRows: [
+              {
+                fieldGroupDefinitionId: 1n,
+                position: 1,
+                fieldValues: [
+                  { fieldDefinitionId: 1n, value: 3000 },
+                  { fieldDefinitionId: 2n, value: '交通費' },
+                ],
+              },
             ],
           },
           userId,
         ),
       ).resolves.toEqual(submission);
 
-      expect(prisma.submission.create).toHaveBeenCalledWith({
+      expect(tx.submission.create).toHaveBeenCalledWith({
         data: {
           documentDefinitionId: 10n,
           createdById: userId,
           status: 'draft',
+        },
+      });
+
+      expect(tx.submissionFieldGroupRow.create).toHaveBeenCalledWith({
+        data: {
+          submissionId: 111n,
+          fieldGroupDefinitionId: 1n,
+          position: 1,
           fieldValues: {
             createMany: {
               data: [
@@ -96,10 +122,28 @@ describe('SubmissionsService', () => {
             },
           },
         },
-        include: {
-          fieldValues: true,
-        },
       });
+    });
+    it('throws BadRequestException when field group does not belong to document definition', async () => {
+      prisma.fieldGroupDefinition.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.create(
+          {
+            documentDefinitionId: 10n,
+            fieldGroupRows: [
+              {
+                fieldGroupDefinitionId: 999n,
+                position: 1,
+                fieldValues: [{ fieldDefinitionId: 1n, value: 3000 }],
+              },
+            ],
+          },
+          userId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(tx.submission.create).not.toHaveBeenCalled();
     });
   });
 
@@ -124,14 +168,18 @@ describe('SubmissionsService', () => {
     it('returns a submission', async () => {
       prisma.submission.findUnique.mockResolvedValue(submission);
 
-      await expect(service.findOne(1n)).resolves.toEqual(submission);
+      await expect(service.findOne(111n)).resolves.toEqual(submission);
 
       expect(prisma.submission.findUnique).toHaveBeenCalledWith({
         where: {
-          id: 1n,
+          id: 111n,
         },
         include: {
-          fieldValues: true,
+          fieldGroupRows: {
+            include: {
+              fieldValues: true,
+            },
+          },
         },
       });
     });
@@ -146,7 +194,11 @@ describe('SubmissionsService', () => {
           id: 999n,
         },
         include: {
-          fieldValues: true,
+          fieldGroupRows: {
+            include: {
+              fieldValues: true,
+            },
+          },
         },
       });
     });
@@ -156,53 +208,74 @@ describe('SubmissionsService', () => {
     it('updates a submission', async () => {
       const updated = {
         ...submission,
-        values: {
-          amount: 5000,
-          reason: '宿泊費',
-        },
+        fieldGroupRows: [
+          {
+            fieldGroupDefinitionId: 1n,
+            position: 1,
+            fieldValues: [
+              { fieldDefinitionId: 1n, value: 3000 },
+              { fieldDefinitionId: 2n, value: '交通費' },
+            ],
+          },
+        ],
       };
 
-      prisma.submission.findUnique.mockResolvedValue(submission);
-      tx.submissionFieldValue.deleteMany.mockResolvedValue(updated);
+      prisma.submission.findUnique.mockResolvedValue(updated);
+      prisma.fieldGroupDefinition.findMany.mockResolvedValue([
+        {
+          id: 1n,
+          fieldDefinitions: [{ id: 1n }, { id: 2n }],
+        },
+      ]);
       tx.submission.update.mockResolvedValue(updated);
 
       await expect(
-        service.update(1n, {
-          fieldValues: [
-            { fieldDefinitionId: 1n, value: 5000 },
-            { fieldDefinitionId: 2n, value: '交通費' },
+        service.update(111n, {
+          fieldGroupRows: [
+            {
+              fieldGroupDefinitionId: 1n,
+              position: 1,
+              fieldValues: [
+                { fieldDefinitionId: 1n, value: 3000 },
+                { fieldDefinitionId: 2n, value: '交通費' },
+              ],
+            },
           ],
         }),
       ).resolves.toEqual(updated);
 
       expect(prisma.submission.findUnique).toHaveBeenCalledWith({
         where: {
-          id: 1n,
+          id: 111n,
         },
       });
 
-      expect(tx.submissionFieldValue.deleteMany).toHaveBeenCalledWith({
+      expect(tx.submissionFieldGroupRow.deleteMany).toHaveBeenCalledWith({
         where: {
-          submissionId: 1n,
+          submissionId: 111n,
         },
       });
 
       expect(tx.submission.update).toHaveBeenCalledWith({
+        data: {},
         where: {
-          id: 1n,
+          id: 111n,
         },
+      });
+
+      expect(tx.submissionFieldGroupRow.create).toHaveBeenCalledWith({
         data: {
+          submissionId: 111n,
+          fieldGroupDefinitionId: 1n,
+          position: 1,
           fieldValues: {
             createMany: {
               data: [
-                { fieldDefinitionId: 1n, value: 5000 },
+                { fieldDefinitionId: 1n, value: 3000 },
                 { fieldDefinitionId: 2n, value: '交通費' },
               ],
             },
           },
-        },
-        include: {
-          fieldValues: true,
         },
       });
     });
@@ -212,21 +285,53 @@ describe('SubmissionsService', () => {
 
       await expect(
         service.update(999n, {
-          fieldValues: [
-            { fieldDefinitionId: 1n, value: 5000 },
-            { fieldDefinitionId: 2n, value: '交通費' },
+          fieldGroupRows: [
+            {
+              fieldGroupDefinitionId: 1n,
+              position: 1,
+              fieldValues: [
+                { fieldDefinitionId: 1n, value: 3000 },
+                { fieldDefinitionId: 2n, value: '交通費' },
+              ],
+            },
           ],
         }),
       ).rejects.toThrow(NotFoundException);
 
-      expect(prisma.submission.update).not.toHaveBeenCalled();
+      expect(tx.submission.update).not.toHaveBeenCalled();
+    });
+    it('throws BadRequestException when field definition does not belong to field group', async () => {
+      prisma.fieldGroupDefinition.findMany.mockResolvedValue([
+        {
+          id: 1n,
+          fieldDefinitions: [{ id: 1n }],
+        },
+      ]);
+
+      await expect(
+        service.create(
+          {
+            documentDefinitionId: 10n,
+            fieldGroupRows: [
+              {
+                fieldGroupDefinitionId: 1n,
+                position: 1,
+                fieldValues: [{ fieldDefinitionId: 999n, value: 3000 }],
+              },
+            ],
+          },
+          userId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(tx.submission.create).not.toHaveBeenCalled();
     });
   });
 
   describe('remove', () => {
     it('removes a submission', async () => {
       prisma.submission.findUnique.mockResolvedValue(submission);
-      prisma.submission.delete.mockResolvedValue(submission);
+      tx.submission.delete.mockResolvedValue(submission);
 
       await expect(service.remove(1n)).resolves.toEqual(submission);
 
@@ -236,7 +341,17 @@ describe('SubmissionsService', () => {
         },
       });
 
-      expect(prisma.submission.delete).toHaveBeenCalledWith({
+      expect(tx.submissionFieldGroupRow.deleteMany).toHaveBeenCalledWith({
+        where: { submissionId: 1n },
+      });
+      expect(tx.submissionFieldValue.deleteMany).toHaveBeenCalledWith({
+        where: {
+          submissionFieldGroupRow: {
+            submissionId: 1n,
+          },
+        },
+      });
+      expect(tx.submission.delete).toHaveBeenCalledWith({
         where: {
           id: 1n,
         },
@@ -248,7 +363,9 @@ describe('SubmissionsService', () => {
 
       await expect(service.remove(999n)).rejects.toThrow(NotFoundException);
 
-      expect(prisma.submission.delete).not.toHaveBeenCalled();
+      expect(tx.submissionFieldGroupRow.deleteMany).not.toHaveBeenCalled();
+      expect(tx.submissionFieldValue.deleteMany).not.toHaveBeenCalled();
+      expect(tx.submission.delete).not.toHaveBeenCalled();
     });
   });
 });

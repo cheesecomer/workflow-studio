@@ -24,7 +24,6 @@ describe('DocumentsController (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
-    await prisma.$disconnect();
   });
 
   it('runs document CRUD flow', async () => {
@@ -100,13 +99,21 @@ describe('DocumentsController (e2e)', () => {
       .send({
         name: 'Updated Expense Request',
         draftContent: {
-          fields: [
+          groups: [
             {
               key: 'price',
               label: '申請額',
-              fieldType: 'number',
-              required: true,
-              settings: {},
+              repeatable: false,
+              minRows: 1,
+              fields: [
+                {
+                  key: 'price',
+                  label: '申請額',
+                  fieldType: 'number',
+                  required: true,
+                  settings: {},
+                },
+              ],
             },
           ],
           workflow: {
@@ -136,13 +143,21 @@ describe('DocumentsController (e2e)', () => {
         expect(body.name).toBe('Updated Expense Request');
         expect(body.currentDocumentDefinitionId).toBeDefined();
         expect(body.publishedContent).toEqual({
-          fields: [
+          groups: [
             {
               key: 'price',
               label: '申請額',
-              fieldType: 'number',
-              required: true,
-              settings: {},
+              repeatable: false,
+              minRows: 1,
+              fields: [
+                {
+                  key: 'price',
+                  label: '申請額',
+                  fieldType: 'number',
+                  required: true,
+                  settings: {},
+                },
+              ],
             },
           ],
           workflow: {
@@ -172,7 +187,11 @@ describe('DocumentsController (e2e)', () => {
       include: {
         currentDocumentDefinition: {
           include: {
-            fieldDefinitions: true,
+            fieldGroupDefinitions: {
+              include: {
+                fieldDefinitions: true,
+              },
+            },
             approvalPolicies: {
               include: {
                 requirements: true,
@@ -188,11 +207,16 @@ describe('DocumentsController (e2e)', () => {
       name: 'Updated Expense Request',
     });
 
-    expect(document.currentDocumentDefinition?.fieldDefinitions).toHaveLength(
-      1,
-    );
     expect(
-      document.currentDocumentDefinition?.fieldDefinitions[0],
+      document.currentDocumentDefinition?.fieldGroupDefinitions,
+    ).toHaveLength(1);
+    expect(
+      document.currentDocumentDefinition?.fieldGroupDefinitions[0]
+        .fieldDefinitions,
+    ).toHaveLength(1);
+    expect(
+      document.currentDocumentDefinition?.fieldGroupDefinitions[0]
+        .fieldDefinitions[0],
     ).toMatchObject({
       key: 'price',
       label: '申請額',

@@ -20,7 +20,8 @@
 erDiagram
     DOCUMENTS ||--o{ DOCUMENT_DEFINITIONS : publishes
 
-    DOCUMENT_DEFINITIONS ||--o{ FIELD_DEFINITIONS : defines
+    DOCUMENT_DEFINITIONS ||--o{ FIELD_GROUP_DEFINITIONS : defines
+    FIELD_GROUP_DEFINITIONS ||--o{ FIELD_DEFINITIONS : has
 
     DOCUMENT_DEFINITIONS ||--o{ APPROVAL_POLICIES : defines
     APPROVAL_POLICIES ||--o{ APPROVAL_REQUIREMENTS : has
@@ -92,8 +93,11 @@ DepartmentMembership は所属履歴を保持する。
 erDiagram
     DOCUMENT_DEFINITIONS ||--o{ SUBMISSIONS : used_by
 
+    FIELD_GROUP_DEFINITIONS ||--o{ SUBMISSION_FIELD_GROUP_ROWS : receives
+    SUBMISSIONS ||--o{ SUBMISSION_FIELD_GROUP_ROWS : has
+
+    SUBMISSION_FIELD_GROUP_ROWS ||--o{ SUBMISSION_FIELD_VALUES : has
     FIELD_DEFINITIONS ||--o{ SUBMISSION_FIELD_VALUES : receives
-    SUBMISSIONS ||--o{ SUBMISSION_FIELD_VALUES : has
 
     SUBMISSIONS ||--o{ APPLIED_APPROVAL_POLICIES : has
     APPROVAL_POLICIES ||--o{ APPLIED_APPROVAL_POLICIES : applied_as
@@ -242,6 +246,8 @@ approved
 
 ```text
 Submission
+ ├ SubmissionFieldGroupRow
+ │  └ SubmissionFieldValue
  └ AppliedApprovalPolicy
     └ AppliedApprovalRequirement
        └ Approver

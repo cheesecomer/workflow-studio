@@ -1,8 +1,16 @@
 export type DocumentDraft = {
-  fields: DocumentDraftField[];
+  groups: DocumentDraftFieldGroup[];
   workflow: {
     policies: DocumentDraftApprovalPolicy[];
   };
+};
+
+export type DocumentDraftFieldGroup = {
+  key: string;
+  label: string;
+  repeatable: boolean;
+  minRows: number;
+  fields: DocumentDraftField[];
 };
 
 export type DocumentDraftField = {

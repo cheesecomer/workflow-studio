@@ -332,7 +332,7 @@ ApprovalPolicy や ApprovalRequirement の実行時データを持たない。
 # Related Documents
 
 - ADR-0001: Use Immutable Document Definitions
-- ADR-0002: Store Document Draft as JSON
+- ADR-0002: Store Document Editable Content as JSON
 - domain-model.md
 - request-lifecycle.md
 - schema.md

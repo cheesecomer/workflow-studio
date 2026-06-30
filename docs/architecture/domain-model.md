@@ -91,15 +91,64 @@ draft_content = published_content
 ## 関連
 
 - Document
-- FieldDefinition
+- FieldGroupDefinition
 - ApprovalPolicy
 - Submission
+
+---
+
+# FieldGroupDefinition
+
+申請書に含まれる入力項目グループの定義。
+
+FieldDefinition は必ず FieldGroupDefinition に属する。
+
+例:
+
+- 基本情報
+- 交通費明細
+- 購入品明細
+
+MVP では FieldGroupDefinition の入れ子構造は扱わない。
+FieldGroupDefinition は DocumentDefinition 直下にのみ配置する。
+
+## 主な属性
+
+- name
+- position
+- repeatable
+- min_rows
+- max_rows
+
+### repeatable
+
+同じ入力項目セットを複数行入力できるかを表す。
+
+false の場合は通常の入力グループとして扱う。
+
+true の場合は明細グループとして扱う。
+
+例:
+
+交通費明細
+
+- 日付
+- 交通手段
+- 区間
+- 金額
+
+## 関連
+
+- DocumentDefinition
+- FieldDefinition
 
 ---
 
 # FieldDefinition
 
 申請書に含まれる入力項目の定義。
+
+FieldDefinition は必ず FieldGroupDefinition に属する。
 
 例:
 
@@ -108,9 +157,19 @@ draft_content = published_content
 - 申請理由
 - 出張先
 
+FieldDefinition 自体は入力項目の型や制約を表し、
+実際に入力された値は SubmissionFieldValue として保存する。
+
+## 主な属性
+
+- name
+- type
+- required
+- position
+
 ## 関連
 
-- DocumentDefinition
+- FieldGroupDefinition
 - SubmissionFieldValue
 
 ---
@@ -339,8 +398,63 @@ Submission は作成時点の DocumentDefinition を参照する。
 ## 関連
 
 - DocumentDefinition
-- SubmissionFieldValue
+- SubmissionFieldGroupRow
 - AppliedApprovalPolicy
+
+---
+
+# SubmissionFieldGroupRow
+
+申請時に入力された FieldGroupDefinition の1行を表す。
+
+FieldDefinition は必ず FieldGroupDefinition に属するため、
+SubmissionFieldValue は必ず SubmissionFieldGroupRow に属する。
+
+repeatable = false の FieldGroupDefinition でも、
+SubmissionFieldGroupRow を1件作成する。
+
+repeatable = true の FieldGroupDefinition では、
+入力された行数分の SubmissionFieldGroupRow を作成する。
+
+例:
+
+基本情報グループ
+
+- 1行目
+  - 件名
+  - 申請理由
+
+交通費明細グループ
+
+- 1行目
+  - 日付
+  - 交通手段
+  - 区間
+  - 金額
+- 2行目
+  - 日付
+  - 交通手段
+  - 区間
+  - 金額
+
+## 主な属性
+
+- position
+
+### position
+
+同一 FieldGroupDefinition 内での行順を表す。
+
+1から始まる連番とする。
+
+repeatable = false の FieldGroupDefinition では、
+常に 1 とする。
+
+## 関連
+
+- Submission
+- FieldGroupDefinition
+- SubmissionFieldValue
 
 ---
 
@@ -350,9 +464,24 @@ Submission は作成時点の DocumentDefinition を参照する。
 
 FieldDefinition に対応する実データ。
 
+SubmissionFieldValue は必ず SubmissionFieldGroupRow に属する。
+
+例:
+
+基本情報グループ
+
+- 件名 = 「6月交通費精算」
+- 申請理由 = 「出張」
+
+交通費明細グループ 1行目
+
+- 日付 = 「2026-06-30」
+- 区間 = 「東京→仙台」
+- 金額 = 「11,000」
+
 ## 関連
 
-- Submission
+- SubmissionFieldGroupRow
 - FieldDefinition
 
 ---
@@ -504,7 +633,8 @@ ApprovalDecision は監査ログとして扱う。
 ```text
 Document
 └─ DocumentDefinition
-   ├─ FieldDefinition
+   ├─ FieldGroupDefinition
+   │  └─ FieldDefinition
    └─ ApprovalPolicy
       └─ ApprovalRequirement
 
@@ -514,7 +644,8 @@ User
    └─ Position
 
 Submission
-├─ SubmissionFieldValue
+├─ SubmissionFieldGroupRow
+│  └─ SubmissionFieldValue
 └─ AppliedApprovalPolicy
    └─ AppliedApprovalRequirement
       └─ Approver
@@ -526,14 +657,15 @@ Submission
 # 申請時の流れ
 
 1. DocumentDefinition を選択する
-2. 入力内容を SubmissionFieldValue として保存する
-3. ApprovalPolicy の条件を評価する
-4. 条件を満たした ApprovalPolicy を AppliedApprovalPolicy として作成する
-5. AppliedApprovalPolicy.position を採番する
-6. ApprovalRequirement を AppliedApprovalRequirement として作成する
-7. ApprovalRequirement をもとに承認可能な User を解決する
-8. User ごとに Approver を作成する
-9. 最初の AppliedApprovalPolicy を current_applied_approval_policy_id に設定する
+2. FieldGroupDefinition ごとに SubmissionFieldGroupRow を作成する
+3. 入力内容を SubmissionFieldValue として保存する
+4. ApprovalPolicy の条件を評価する
+5. 条件を満たした ApprovalPolicy を AppliedApprovalPolicy として作成する
+6. AppliedApprovalPolicy.position を採番する
+7. ApprovalRequirement を AppliedApprovalRequirement として作成する
+8. ApprovalRequirement をもとに承認可能な User を解決する
+9. User ごとに Approver を作成する
+10. 最初の AppliedApprovalPolicy を current_applied_approval_policy_id に設定する
 
 ---
 
@@ -548,3 +680,4 @@ Submission
 - 差し戻し
 - 承認順序制御
 - 部署異動・退職時の自動再解決
+- 入れ子構造の入力項目グループの定義

@@ -101,13 +101,21 @@ describe('DocumentsController', () => {
       const dto: PublishDocumentDto = {
         name: 'Updated Expense Request',
         draftContent: {
-          fields: [
+          groups: [
             {
-              key: 'price',
-              label: '申請額',
-              fieldType: 'number',
-              required: true,
-              settings: {},
+              key: 'basic',
+              label: '基本情報',
+              repeatable: false,
+              minRows: 1,
+              fields: [
+                {
+                  key: 'price',
+                  label: '申請額',
+                  fieldType: 'number',
+                  required: true,
+                  settings: {},
+                },
+              ],
             },
           ],
           workflow: {

@@ -28,12 +28,9 @@ describe('SubmissionsController (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.submissionFieldValue.deleteMany();
+    await prisma.submissionFieldGroupRow.deleteMany();
     await prisma.submission.deleteMany();
-    await prisma.fieldDefinition.deleteMany();
-    await prisma.approvalRequirement.deleteMany();
-    await prisma.approvalPolicy.deleteMany();
-    await prisma.documentDefinition.deleteMany();
-    await prisma.document.deleteMany();
   });
 
   it('runs submission CRUD flow', async () => {
@@ -51,28 +48,41 @@ describe('SubmissionsController (e2e)', () => {
         documentId: document.id,
         version: 1,
         publishedById: 1n,
-        fieldDefinitions: {
-          createMany: {
-            data: [
-              {
-                label: '品目',
-                key: 'name',
-                fieldType: 'text',
-                required: true,
-                position: 1,
-                settings: {},
-              },
-              {
-                label: '申請額',
-                key: 'value',
-                fieldType: 'text',
-                required: true,
-                position: 2,
-                settings: {},
-              },
-            ],
-          },
-        },
+      },
+    });
+
+    const basicGroup = await prisma.fieldGroupDefinition.create({
+      data: {
+        documentDefinitionId: documentDefinition.id,
+        label: '品目',
+        key: 'name',
+        position: 1,
+        repeatable: false,
+        minRows: 1,
+      },
+    });
+
+    const titleField = await prisma.fieldDefinition.create({
+      data: {
+        fieldGroupDefinitionId: basicGroup.id,
+        label: '品目',
+        key: 'name',
+        fieldType: 'text',
+        required: true,
+        position: 1,
+        settings: {},
+      },
+    });
+
+    const amountField = await prisma.fieldDefinition.create({
+      data: {
+        fieldGroupDefinitionId: basicGroup.id,
+        label: '申請額',
+        key: 'value',
+        fieldType: 'text',
+        required: true,
+        position: 2,
+        settings: {},
       },
     });
 
@@ -80,15 +90,46 @@ describe('SubmissionsController (e2e)', () => {
       .post('/submissions')
       .send({
         documentDefinitionId: documentDefinition.id.toString(),
-        fieldValues: [],
+        fieldGroupRows: [
+          {
+            fieldGroupDefinitionId: basicGroup.id.toString(),
+            position: 1,
+            fieldValues: [
+              {
+                fieldDefinitionId: titleField.id.toString(),
+                value: '6月交通費精算',
+              },
+              {
+                fieldDefinitionId: amountField.id.toString(),
+                value: 11000,
+              },
+            ],
+          },
+        ],
       })
       .expect(201);
 
     expect(createResponse.body).toMatchObject({
       documentDefinitionId: documentDefinition.id.toString(),
       status: 'draft',
-      fieldValues: [],
+      fieldGroupRows: [
+        {
+          fieldGroupDefinitionId: basicGroup.id.toString(),
+          position: 1,
+          fieldValues: [
+            {
+              fieldDefinitionId: titleField.id.toString(),
+              value: '6月交通費精算',
+            },
+            {
+              fieldDefinitionId: amountField.id.toString(),
+              value: 11000,
+            },
+          ],
+        },
+      ],
     });
+
     type SubmissionResponse = {
       id: string;
     };
@@ -115,20 +156,65 @@ describe('SubmissionsController (e2e)', () => {
           id: submissionId,
           documentDefinitionId: documentDefinition.id.toString(),
           status: 'draft',
-          fieldValues: [],
+          fieldGroupRows: [
+            {
+              fieldGroupDefinitionId: basicGroup.id.toString(),
+              position: 1,
+              fieldValues: [
+                {
+                  fieldDefinitionId: titleField.id.toString(),
+                  value: '6月交通費精算',
+                },
+                {
+                  fieldDefinitionId: amountField.id.toString(),
+                  value: 11000,
+                },
+              ],
+            },
+          ],
         });
       });
 
     await request(app.getHttpServer())
       .patch(`/submissions/${submissionId}`)
       .send({
-        fieldValues: [],
+        fieldGroupRows: [
+          {
+            fieldGroupDefinitionId: basicGroup.id.toString(),
+            position: 1,
+            fieldValues: [
+              {
+                fieldDefinitionId: titleField.id.toString(),
+                value: '6月交通費精算',
+              },
+              {
+                fieldDefinitionId: amountField.id.toString(),
+                value: 13000,
+              },
+            ],
+          },
+        ],
       })
       .expect(200)
       .expect(({ body }) => {
         expect(body).toMatchObject({
           id: submissionId,
-          fieldValues: [],
+          fieldGroupRows: [
+            {
+              fieldGroupDefinitionId: basicGroup.id.toString(),
+              position: 1,
+              fieldValues: [
+                {
+                  fieldDefinitionId: titleField.id.toString(),
+                  value: '6月交通費精算',
+                },
+                {
+                  fieldDefinitionId: amountField.id.toString(),
+                  value: 13000,
+                },
+              ],
+            },
+          ],
         });
       });
 
