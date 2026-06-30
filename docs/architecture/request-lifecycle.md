@@ -35,6 +35,9 @@ Document
 
 編集可能な内容:
 
+- 項目グループ追加
+- 項目グループ削除
+- 項目グループ順変更
 - 項目追加
 - 項目削除
 - 項目順変更
@@ -64,6 +67,7 @@ DocumentDefinition
 
 ```text
 DocumentDefinition
+FieldGroupDefinition
 FieldDefinition
 ApprovalPolicy
 ApprovalRequirement
@@ -128,12 +132,20 @@ Document.draft_content
 Submission(status = draft)
 ```
 
-入力内容は SubmissionFieldValue として保持する。
+入力内容は FieldGroupDefinition ごとに SubmissionFieldGroupRow を作成し、
+その配下の SubmissionFieldValue として保持する。
+
+repeatable = false の FieldGroupDefinition でも、
+SubmissionFieldGroupRow を1件作成する。
+
+repeatable = true の FieldGroupDefinition では、
+入力された行数分の SubmissionFieldGroupRow を作成する。
 
 生成されるデータ:
 
 ```text
 Submission
+SubmissionFieldGroupRow
 SubmissionFieldValue
 ```
 

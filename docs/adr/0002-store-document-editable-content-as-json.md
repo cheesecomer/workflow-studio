@@ -16,6 +16,9 @@ Accepted
 
 編集中の申請書には以下のような変更が発生する。
 
+- 項目グループ追加
+- 項目グループ削除
+- 項目グループ順変更
 - 項目追加
 - 項目削除
 - 項目順変更
@@ -62,6 +65,7 @@ Document.draft_content
 ↓
 
 DocumentDefinition
+FieldGroupDefinition
 FieldDefinition
 ApprovalPolicy
 ApprovalRequirement
@@ -100,6 +104,9 @@ Document.draft_content = Document.published_content
 ### UI と相性が良い
 
 画面上の状態をそのまま保存できる。
+
+FieldGroupDefinition や repeatable な明細行も、
+ネストした JSON として自然に表現できる。
 
 ### 並び替えが容易
 
