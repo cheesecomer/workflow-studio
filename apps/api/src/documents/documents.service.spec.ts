@@ -18,8 +18,8 @@ describe('DocumentsService', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
     },
-    fieldDefinition: {
-      createMany: jest.fn(),
+    fieldGroupDefinition: {
+      create: jest.fn(),
     },
     approvalPolicy: {
       create: jest.fn(),
@@ -217,13 +217,21 @@ describe('DocumentsService', () => {
     const dto: PublishDocumentDto = {
       name: 'Updated Expense Request',
       draftContent: {
-        fields: [
+        groups: [
           {
             key: 'price',
             label: '申請額',
-            fieldType: 'number',
-            required: true,
-            settings: { min: 1 },
+            repeatable: false,
+            minRows: 1,
+            fields: [
+              {
+                key: 'price',
+                label: '申請額',
+                fieldType: 'number',
+                required: true,
+                settings: { min: 1 },
+              },
+            ],
           },
         ],
         workflow: {
@@ -292,18 +300,29 @@ describe('DocumentsService', () => {
         },
       });
 
-      expect(tx.fieldDefinition.createMany).toHaveBeenCalledWith({
-        data: [
-          {
-            documentDefinitionId: documentDefinition.id,
-            key: 'price',
-            label: '申請額',
-            fieldType: 'number',
-            required: true,
-            position: 1,
-            settings: { min: 1 },
+      expect(tx.fieldGroupDefinition.create).toHaveBeenCalledWith({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          key: 'price',
+          label: '申請額',
+          repeatable: false,
+          minRows: 1,
+          position: 1,
+          fieldDefinitions: {
+            createMany: {
+              data: [
+                {
+                  key: 'price',
+                  label: '申請額',
+                  fieldType: 'number',
+                  required: true,
+                  position: 1,
+                  settings: { min: 1 },
+                },
+              ],
+            },
           },
-        ],
+        },
       });
 
       expect(tx.approvalPolicy.create).toHaveBeenCalledWith({

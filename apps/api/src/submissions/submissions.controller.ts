@@ -22,7 +22,6 @@ export class SubmissionsController {
     @CurrentUserDecorator() user: CurrentUser,
     @Body() createSubmissionDto: CreateSubmissionDto,
   ) {
-    void user;
     return this.submissionsService.create(createSubmissionDto, user.id);
   }
 

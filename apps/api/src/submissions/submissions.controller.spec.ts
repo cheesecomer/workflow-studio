@@ -60,7 +60,7 @@ describe('SubmissionsController', () => {
     it('delegates to service with current user id and dto', async () => {
       const dto: CreateSubmissionDto = {
         documentDefinitionId: 1n,
-        fieldValues: [],
+        fieldGroupRows: [],
       };
 
       await controller.create(currentUser, dto);
@@ -75,7 +75,7 @@ describe('SubmissionsController', () => {
   describe('update', () => {
     it('delegates to service with current user id, document id and dto', async () => {
       const dto: UpdateSubmissionDto = {
-        fieldValues: [],
+        fieldGroupRows: [],
       };
 
       await controller.update(currentUser, 1n, dto);

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,20 +12,87 @@ export class SubmissionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createSubmissionDto: CreateSubmissionDto, createdById: bigint) {
-    const { fieldValues, ...submissionData } = createSubmissionDto;
-    return this.prisma.submission.create({
-      data: {
-        ...submissionData,
-        createdById,
-        status: 'draft',
-        fieldValues: {
-          createMany: {
-            data: fieldValues,
-          },
-        },
+    const { fieldGroupRows, ...submissionData } = createSubmissionDto;
+    const groupIds = fieldGroupRows.map((row) => row.fieldGroupDefinitionId);
+    const uniqueGroupIds = [...new Set(groupIds)];
+
+    const groups = await this.prisma.fieldGroupDefinition.findMany({
+      where: {
+        id: { in: uniqueGroupIds },
+        documentDefinitionId: submissionData.documentDefinitionId,
       },
       include: {
-        fieldValues: true,
+        fieldDefinitions: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (groups.length !== uniqueGroupIds.length) {
+      throw new BadRequestException('Invalid field group definition');
+    }
+
+    const fieldDefinitionIdsByGroupId = new Map(
+      groups.map((group) => [
+        group.id.toString(),
+        new Set(group.fieldDefinitions.map((field) => field.id.toString())),
+      ]),
+    );
+
+    for (const { fieldValues, ...fieldGroupRow } of fieldGroupRows) {
+      const allowedFieldIds = fieldDefinitionIdsByGroupId.get(
+        fieldGroupRow.fieldGroupDefinitionId.toString(),
+      );
+
+      if (
+        !allowedFieldIds ||
+        fieldValues.some(
+          (fieldValue) =>
+            !allowedFieldIds.has(fieldValue.fieldDefinitionId.toString()),
+        )
+      ) {
+        throw new BadRequestException('Invalid field definition');
+      }
+    }
+
+    const submissionId = await this.prisma.$transaction(async (tx) => {
+      const submission = await tx.submission.create({
+        data: {
+          ...submissionData,
+          createdById,
+          status: 'draft',
+        },
+      });
+
+      for (const [
+        i,
+        { fieldValues, ...fieldGroupRow },
+      ] of fieldGroupRows.entries()) {
+        await tx.submissionFieldGroupRow.create({
+          data: {
+            ...fieldGroupRow,
+            submissionId: submission.id,
+            position: i + 1,
+            fieldValues: {
+              createMany: {
+                data: fieldValues,
+              },
+            },
+          },
+        });
+      }
+
+      return submission.id;
+    });
+
+    return await this.prisma.submission.findUnique({
+      where: { id: submissionId },
+      include: {
+        fieldGroupRows: {
+          include: {
+            fieldValues: true,
+          },
+        },
       },
     });
   }
@@ -37,7 +108,11 @@ export class SubmissionsService {
     const submission = await this.prisma.submission.findUnique({
       where: { id },
       include: {
-        fieldValues: true,
+        fieldGroupRows: {
+          include: {
+            fieldValues: true,
+          },
+        },
       },
     });
 
@@ -49,7 +124,7 @@ export class SubmissionsService {
   }
 
   async update(id: bigint, updateSubmissionDto: UpdateSubmissionDto) {
-    const { fieldValues, ...submissionData } = updateSubmissionDto;
+    const { fieldGroupRows, ...submissionData } = updateSubmissionDto;
     const submission = await this.prisma.submission.findUnique({
       where: { id },
     });
@@ -58,25 +133,95 @@ export class SubmissionsService {
       throw new NotFoundException('Submission not found');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const groupIds = fieldGroupRows.map((row) => row.fieldGroupDefinitionId);
+    const uniqueGroupIds = [...new Set(groupIds)];
+    const groups = await this.prisma.fieldGroupDefinition.findMany({
+      where: {
+        id: { in: uniqueGroupIds },
+        documentDefinitionId: submission.documentDefinitionId,
+      },
+      include: {
+        fieldDefinitions: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (groups.length !== uniqueGroupIds.length) {
+      throw new BadRequestException('Invalid field group definition');
+    }
+
+    const fieldDefinitionIdsByGroupId = new Map(
+      groups.map((group) => [
+        group.id.toString(),
+        new Set(group.fieldDefinitions.map((field) => field.id.toString())),
+      ]),
+    );
+
+    for (const { fieldValues, ...fieldGroupRow } of fieldGroupRows) {
+      const allowedFieldIds = fieldDefinitionIdsByGroupId.get(
+        fieldGroupRow.fieldGroupDefinitionId.toString(),
+      );
+
+      if (
+        !allowedFieldIds ||
+        fieldValues.some(
+          (fieldValue) =>
+            !allowedFieldIds.has(fieldValue.fieldDefinitionId.toString()),
+        )
+      ) {
+        throw new BadRequestException('Invalid field definition');
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
       await tx.submissionFieldValue.deleteMany({
+        where: {
+          submissionFieldGroupRow: {
+            submissionId: id,
+          },
+        },
+      });
+
+      await tx.submissionFieldGroupRow.deleteMany({
         where: { submissionId: id },
       });
 
-      return tx.submission.update({
+      await tx.submission.update({
         where: { id },
         data: {
           ...submissionData,
-          fieldValues: {
-            createMany: {
-              data: fieldValues,
-            },
-          },
-        },
-        include: {
-          fieldValues: true,
         },
       });
+
+      for (const [
+        i,
+        { fieldValues, ...fieldGroupRow },
+      ] of fieldGroupRows.entries()) {
+        await tx.submissionFieldGroupRow.create({
+          data: {
+            ...fieldGroupRow,
+            submissionId: submission.id,
+            position: i + 1,
+            fieldValues: {
+              createMany: {
+                data: fieldValues,
+              },
+            },
+          },
+        });
+      }
+    });
+
+    return await this.prisma.submission.findUnique({
+      where: { id: submission.id },
+      include: {
+        fieldGroupRows: {
+          include: {
+            fieldValues: true,
+          },
+        },
+      },
     });
   }
 
@@ -89,8 +234,22 @@ export class SubmissionsService {
       throw new NotFoundException('Submission not found');
     }
 
-    return this.prisma.submission.delete({
-      where: { id },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.submissionFieldValue.deleteMany({
+        where: {
+          submissionFieldGroupRow: {
+            submissionId: id,
+          },
+        },
+      });
+
+      await tx.submissionFieldGroupRow.deleteMany({
+        where: { submissionId: id },
+      });
+
+      return await tx.submission.delete({
+        where: { id },
+      });
     });
   }
 }

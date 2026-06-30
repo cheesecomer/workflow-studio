@@ -90,14 +90,27 @@ export class DocumentsService {
         },
       });
 
-      await tx.fieldDefinition.createMany({
-        data: dto.draftContent.fields.map((it, i) => ({
-          ...it,
-          documentDefinitionId: definition.id,
-          position: i + 1,
-          settings: it.settings as unknown as Prisma.InputJsonValue,
-        })),
-      });
+      for (const [
+        i,
+        { fields, ...group },
+      ] of dto.draftContent.groups.entries()) {
+        await tx.fieldGroupDefinition.create({
+          data: {
+            ...group,
+            documentDefinitionId: definition.id,
+            position: i + 1,
+            fieldDefinitions: {
+              createMany: {
+                data: fields.map((it, ii) => ({
+                  ...it,
+                  position: ii + 1,
+                  settings: it.settings as unknown as Prisma.InputJsonValue,
+                })),
+              },
+            },
+          },
+        });
+      }
 
       for (const [
         index,

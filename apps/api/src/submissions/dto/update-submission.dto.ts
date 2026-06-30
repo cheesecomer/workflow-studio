@@ -5,6 +5,12 @@ export class FieldValue {
   value!: Prisma.InputJsonValue;
 }
 
-export class UpdateSubmissionDto {
+export class FieldGroupRow {
+  fieldGroupDefinitionId!: bigint;
+  position!: number;
   fieldValues!: FieldValue[];
+}
+
+export class UpdateSubmissionDto {
+  fieldGroupRows!: FieldGroupRow[];
 }

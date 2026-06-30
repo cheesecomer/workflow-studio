@@ -93,9 +93,9 @@ model DocumentDefinition {
   currentForDocuments Document[] @relation("CurrentDocumentDefinition")
   publishedBy         User       @relation("PublishedDocumentDefinitions", fields: [publishedById], references: [id])
 
-  fieldDefinitions FieldDefinition[]
-  approvalPolicies ApprovalPolicy[]
-  submissions      Submission[]
+  fieldGroupDefinitions FieldGroupDefinition[]
+  approvalPolicies      ApprovalPolicy[]
+  submissions           Submission[]
 
   @@unique([documentId, version])
   @@index([documentId])
@@ -103,25 +103,48 @@ model DocumentDefinition {
   @@map("document_definitions")
 }
 
-model FieldDefinition {
+model FieldGroupDefinition {
   id                   BigInt    @id @default(autoincrement())
   documentDefinitionId BigInt    @map("document_definition_id")
   key                  String
   label                String
-  fieldType            FieldType @map("field_type")
-  required             Boolean
+  repeatable           Boolean
+  minRows              Int       @map("min_rows")
+  maxRows              Int?      @map("max_rows")
   position             Int
-  settings             Json
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
   deletedAt            DateTime? @map("deleted_at")
 
-  documentDefinition    DocumentDefinition     @relation(fields: [documentDefinitionId], references: [id])
-  submissionFieldValues SubmissionFieldValue[]
+  documentDefinition DocumentDefinition        @relation(fields: [documentDefinitionId], references: [id])
+  fieldDefinitions   FieldDefinition[]
+  fieldGroupRows     SubmissionFieldGroupRow[]
 
   @@unique([documentDefinitionId, key])
   @@unique([documentDefinitionId, position])
   @@index([documentDefinitionId])
+  @@map("field_group_definitions")
+}
+
+model FieldDefinition {
+  id                     BigInt    @id @default(autoincrement())
+  fieldGroupDefinitionId BigInt    @map("field_group_definition_id")
+  key                    String
+  label                  String
+  fieldType              FieldType @map("field_type")
+  required               Boolean
+  position               Int
+  settings               Json
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  deletedAt              DateTime? @map("deleted_at")
+
+  fieldGroupDefinition  FieldGroupDefinition   @relation(fields: [fieldGroupDefinitionId], references: [id])
+  submissionFieldValues SubmissionFieldValue[]
+
+  @@unique([fieldGroupDefinitionId, key])
+  @@unique([fieldGroupDefinitionId, position])
+  @@index([fieldGroupDefinitionId])
   @@map("field_definitions")
 }
 
@@ -261,13 +284,13 @@ model Submission {
   createdAt                      DateTime         @default(now()) @map("created_at")
   updatedAt                      DateTime         @updatedAt @map("updated_at")
 
-  documentDefinition           DocumentDefinition      @relation(fields: [documentDefinitionId], references: [id])
-  createdBy                    User                    @relation("CreatedSubmissions", fields: [createdById], references: [id])
-  submittedBy                  User?                   @relation("SubmittedSubmissions", fields: [submittedById], references: [id])
-  applicantDepartment          Department?             @relation(fields: [applicantDepartmentId], references: [id])
-  currentAppliedApprovalPolicy AppliedApprovalPolicy?  @relation("CurrentAppliedApprovalPolicy", fields: [currentAppliedApprovalPolicyId], references: [id])
-  fieldValues                  SubmissionFieldValue[]
-  appliedApprovalPolicies      AppliedApprovalPolicy[] @relation("SubmissionAppliedApprovalPolicies")
+  documentDefinition           DocumentDefinition        @relation(fields: [documentDefinitionId], references: [id])
+  createdBy                    User                      @relation("CreatedSubmissions", fields: [createdById], references: [id])
+  submittedBy                  User?                     @relation("SubmittedSubmissions", fields: [submittedById], references: [id])
+  applicantDepartment          Department?               @relation(fields: [applicantDepartmentId], references: [id])
+  currentAppliedApprovalPolicy AppliedApprovalPolicy?    @relation("CurrentAppliedApprovalPolicy", fields: [currentAppliedApprovalPolicyId], references: [id])
+  fieldGroupRows               SubmissionFieldGroupRow[]
+  appliedApprovalPolicies      AppliedApprovalPolicy[]   @relation("SubmissionAppliedApprovalPolicies")
 
   @@index([documentDefinitionId])
   @@index([createdById])
@@ -277,19 +300,37 @@ model Submission {
   @@map("submissions")
 }
 
-model SubmissionFieldValue {
-  id                BigInt   @id @default(autoincrement())
-  submissionId      BigInt   @map("submission_id")
-  fieldDefinitionId BigInt   @map("field_definition_id")
-  value             Json?
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+model SubmissionFieldGroupRow {
+  id                     BigInt   @id @default(autoincrement())
+  submissionId           BigInt   @map("submission_id")
+  fieldGroupDefinitionId BigInt   @map("field_group_definition_id")
+  position               Int
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
-  submission      Submission      @relation(fields: [submissionId], references: [id])
-  fieldDefinition FieldDefinition @relation(fields: [fieldDefinitionId], references: [id])
+  submission           Submission             @relation(fields: [submissionId], references: [id])
+  fieldGroupDefinition FieldGroupDefinition   @relation(fields: [fieldGroupDefinitionId], references: [id])
+  fieldValues          SubmissionFieldValue[]
 
-  @@unique([submissionId, fieldDefinitionId])
+  @@unique([submissionId, fieldGroupDefinitionId, position])
   @@index([submissionId])
+  @@index([fieldGroupDefinitionId])
+  @@map("submission_field_group_rows")
+}
+
+model SubmissionFieldValue {
+  id                        BigInt   @id @default(autoincrement())
+  submissionFieldGroupRowId BigInt   @map("submission_field_group_row_id")
+  fieldDefinitionId         BigInt   @map("field_definition_id")
+  value                     Json?
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  submissionFieldGroupRow SubmissionFieldGroupRow @relation(fields: [submissionFieldGroupRowId], references: [id])
+  fieldDefinition         FieldDefinition         @relation(fields: [fieldDefinitionId], references: [id])
+
+  @@unique([submissionFieldGroupRowId, fieldDefinitionId])
+  @@index([submissionFieldGroupRowId])
   @@index([fieldDefinitionId])
   @@map("submission_field_values")
 }
