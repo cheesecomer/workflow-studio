@@ -6,10 +6,17 @@ import {
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubmissionsSubmitValidator } from './submissions-submit.validator';
+import { SubmissionsApprovalRouteMaterializer } from './submissions-approval-route.materializer';
+import { Prisma } from '@workflow-studio/db';
 
 @Injectable()
 export class SubmissionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly submissionsSubmitValidator: SubmissionsSubmitValidator,
+    private readonly submissionsApprovalRouteMaterializer: SubmissionsApprovalRouteMaterializer,
+  ) {}
 
   async create(createSubmissionDto: CreateSubmissionDto, createdById: bigint) {
     const { fieldGroupRows, ...submissionData } = createSubmissionDto;
@@ -251,5 +258,105 @@ export class SubmissionsService {
         where: { id },
       });
     });
+  }
+
+  async submit(id: bigint, submittedById: bigint) {
+    const submission = await this.prisma.submission.findUnique({
+      where: { id },
+      include: {
+        fieldGroupRows: {
+          include: {
+            fieldValues: true,
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    const documentDefinition = await this.prisma.documentDefinition.findUnique({
+      where: { id: submission.documentDefinitionId },
+      include: {
+        fieldGroupDefinitions: {
+          include: {
+            fieldDefinitions: true,
+          },
+        },
+        approvalPolicies: {
+          include: {
+            requirements: true,
+          },
+          orderBy: { position: 'asc' },
+        },
+      },
+    });
+
+    if (!documentDefinition) {
+      throw new NotFoundException('Document definition not found');
+    }
+
+    if (submission.status != 'draft') {
+      throw new BadRequestException('Invalid submission status');
+    }
+
+    this.submissionsSubmitValidator.validate(submission, documentDefinition);
+    return await this.prisma.$transaction(async (tx) => {
+      const submittedAt = new Date();
+      const applicantDepartmentId = await this.resolveApplicantDepartmentId(
+        tx,
+        { submittedById, submittedAt },
+      );
+      const firstAppliedApprovalPolicyId =
+        await this.submissionsApprovalRouteMaterializer.materialize(tx, {
+          submission,
+          documentDefinition,
+          applicantDepartmentId,
+          submittedAt,
+        });
+
+      return tx.submission.update({
+        where: { id },
+        data: {
+          status: 'submitted',
+          submittedById,
+          submittedAt,
+          currentAppliedApprovalPolicyId: firstAppliedApprovalPolicyId,
+          applicantDepartmentId: applicantDepartmentId,
+        },
+      });
+    });
+  }
+
+  private async resolveApplicantDepartmentId(
+    tx: Prisma.TransactionClient,
+    params: { submittedById: bigint; submittedAt: Date },
+  ) {
+    const membership = await tx.departmentMembership.findFirst({
+      where: {
+        userId: params.submittedById,
+        joinedAt: {
+          lte: params.submittedAt,
+        },
+        OR: [
+          { leftAt: null },
+          {
+            leftAt: {
+              gt: params.submittedAt,
+            },
+          },
+        ],
+      },
+      orderBy: {
+        joinedAt: 'desc',
+      },
+    });
+
+    if (!membership) {
+      throw new BadRequestException('Applicant department not found');
+    }
+
+    return membership.departmentId;
   }
 }
