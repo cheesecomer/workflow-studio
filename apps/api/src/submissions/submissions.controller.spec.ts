@@ -14,6 +14,8 @@ describe('SubmissionsController', () => {
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    submit: jest.fn(),
+    findApprovable: jest.fn(),
   };
 
   const currentUser: CurrentUser = {
@@ -49,7 +51,7 @@ describe('SubmissionsController', () => {
   });
 
   describe('findOne', () => {
-    it('delegates to service with current user id and document id', async () => {
+    it('delegates to service with current user id and submission id', async () => {
       await controller.findOne(currentUser, 1n);
 
       expect(submissionService.findOne).toHaveBeenCalledWith(1n);
@@ -73,7 +75,7 @@ describe('SubmissionsController', () => {
   });
 
   describe('update', () => {
-    it('delegates to service with current user id, document id and dto', async () => {
+    it('delegates to service with current user id, submission id and dto', async () => {
       const dto: UpdateSubmissionDto = {
         fieldGroupRows: [],
       };
@@ -85,10 +87,28 @@ describe('SubmissionsController', () => {
   });
 
   describe('remove', () => {
-    it('delegates to service with current user id and document id', async () => {
+    it('delegates to service with current user id and submission id', async () => {
       await controller.remove(currentUser, 1n);
 
       expect(submissionService.remove).toHaveBeenCalledWith(1n);
+    });
+  });
+
+  describe('submit', () => {
+    it('delegates to service with current user id and submission id', async () => {
+      await controller.submit(currentUser, 1n);
+
+      expect(submissionService.submit).toHaveBeenCalledWith(1n, currentUser.id);
+    });
+  });
+
+  describe('remove', () => {
+    it('delegates to service with current user id', async () => {
+      await controller.findApprovable(currentUser);
+
+      expect(submissionService.findApprovable).toHaveBeenCalledWith(
+        currentUser.id,
+      );
     });
   });
 });

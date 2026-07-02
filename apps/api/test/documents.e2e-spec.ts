@@ -94,6 +94,14 @@ describe('DocumentsController (e2e)', () => {
 
     const documentId = (createResponse.body as { id: string }).id;
 
+    const position =
+      (await prisma.position.findFirst({
+        where: { name: 'Manager' },
+      })) ??
+      (await prisma.position.create({
+        data: { name: 'Manager', rank: 10 },
+      }));
+
     await request(app.getHttpServer())
       .post(`/documents/${documentId}/publish`)
       .send({
@@ -127,7 +135,7 @@ describe('DocumentsController (e2e)', () => {
                     name: 'Require 3 users',
                     departmentScope: 'same_tree',
                     positionOperator: 'eq',
-                    positionId: '1',
+                    positionId: position.id.toString(),
                     upperPositionId: null,
                     requiredCount: 3,
                   },
@@ -171,7 +179,7 @@ describe('DocumentsController (e2e)', () => {
                     name: 'Require 3 users',
                     departmentScope: 'same_tree',
                     positionOperator: 'eq',
-                    positionId: '1',
+                    positionId: position.id.toString(),
                     upperPositionId: null,
                     requiredCount: 3,
                   },
@@ -246,7 +254,7 @@ describe('DocumentsController (e2e)', () => {
       name: 'Require 3 users',
       departmentScope: 'same_tree',
       positionOperator: 'eq',
-      positionId: 1n,
+      positionId: position.id,
       upperPositionId: null,
       requiredCount: 3,
     });

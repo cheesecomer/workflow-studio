@@ -30,6 +30,11 @@ export class SubmissionsController {
     return this.submissionsService.findAll(user.id);
   }
 
+  @Get('/approvable')
+  findApprovable(@CurrentUserDecorator() user: CurrentUser) {
+    return this.submissionsService.findApprovable(user.id);
+  }
+
   @Get(':id')
   findOne(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
     void user;
