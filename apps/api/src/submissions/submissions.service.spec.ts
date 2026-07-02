@@ -3,6 +3,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionsService } from './submissions.service';
+import { SubmissionsSubmitValidator } from './submissions-submit.validator';
+import { SubmissionsApprovalRouteMaterializer } from './submissions-approval-route.materializer';
 
 describe('SubmissionsService', () => {
   let service: SubmissionsService;
@@ -23,6 +25,9 @@ describe('SubmissionsService', () => {
     submissionFieldValue: {
       deleteMany: jest.fn(),
     },
+    departmentMembership: {
+      findFirst: jest.fn(),
+    },
   };
 
   const prisma = {
@@ -37,6 +42,17 @@ describe('SubmissionsService', () => {
     $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
       callback(tx),
     ),
+    documentDefinition: {
+      findUnique: jest.fn(),
+    },
+  };
+
+  const submissionsSubmitValidator = {
+    validate: jest.fn(),
+  };
+
+  const submissionsApprovalRouteMaterializer = {
+    materialize: jest.fn(),
   };
 
   const userId = 100n;
@@ -63,6 +79,14 @@ describe('SubmissionsService', () => {
         {
           provide: PrismaService,
           useValue: prisma,
+        },
+        {
+          provide: SubmissionsSubmitValidator,
+          useValue: submissionsSubmitValidator,
+        },
+        {
+          provide: SubmissionsApprovalRouteMaterializer,
+          useValue: submissionsApprovalRouteMaterializer,
         },
       ],
     }).compile();
@@ -366,6 +390,155 @@ describe('SubmissionsService', () => {
       expect(tx.submissionFieldGroupRow.deleteMany).not.toHaveBeenCalled();
       expect(tx.submissionFieldValue.deleteMany).not.toHaveBeenCalled();
       expect(tx.submission.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('submit', () => {
+    const submittedAt = new Date('2026-01-01T00:00:00.000Z');
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(submittedAt);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    const createSubmission = () => ({
+      id: 1n,
+      documentDefinitionId: 10n,
+      createdById: 1n,
+      submittedById: null,
+      applicantDepartmentId: 100n,
+      status: 'draft',
+      currentAppliedApprovalPolicyId: null,
+      submittedAt: null,
+      approvedAt: null,
+      rejectedAt: null,
+      withdrawnAt: null,
+      createdAt: submittedAt,
+      updatedAt: submittedAt,
+      fieldGroupRows: [],
+    });
+
+    const createDocumentDefinition = () => ({
+      id: 10n,
+      documentId: 1n,
+      version: 1,
+      name: 'Expense',
+      status: 'published',
+      createdAt: submittedAt,
+      updatedAt: submittedAt,
+      fieldGroupDefinitions: [],
+      approvalPolicies: [],
+    });
+
+    it('submits draft submission', async () => {
+      const submission = createSubmission();
+      const documentDefinition = createDocumentDefinition();
+      const applicantDepartmentId = 1n;
+
+      prisma.submission.findUnique.mockResolvedValue(submission);
+      prisma.documentDefinition.findUnique.mockResolvedValue(
+        documentDefinition,
+      );
+      tx.departmentMembership.findFirst.mockResolvedValue({
+        departmentId: applicantDepartmentId,
+      });
+
+      tx.submission.update.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+        submittedById: 2n,
+        submittedAt,
+        currentAppliedApprovalPolicyId: 1000n,
+      });
+
+      submissionsApprovalRouteMaterializer.materialize.mockResolvedValue(1000n);
+
+      const result = await service.submit(1n, 2n);
+
+      expect(submissionsSubmitValidator.validate).toHaveBeenCalledWith(
+        submission,
+        documentDefinition,
+      );
+
+      expect(
+        submissionsApprovalRouteMaterializer.materialize,
+      ).toHaveBeenCalledWith(tx, {
+        submission,
+        documentDefinition,
+        applicantDepartmentId,
+        submittedAt,
+      });
+
+      expect(tx.submission.update).toHaveBeenCalledWith({
+        where: { id: 1n },
+        data: {
+          status: 'submitted',
+          submittedById: 2n,
+          submittedAt,
+          applicantDepartmentId,
+          currentAppliedApprovalPolicyId: 1000n,
+        },
+      });
+
+      expect(result.status).toBe('submitted');
+    });
+
+    it('throws NotFoundException when submission does not exist', async () => {
+      prisma.submission.findUnique.mockResolvedValue(null);
+
+      await expect(service.submit(1n, 2n)).rejects.toThrow(NotFoundException);
+
+      expect(prisma.documentDefinition.findUnique).not.toHaveBeenCalled();
+      expect(submissionsSubmitValidator.validate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when document definition does not exist', async () => {
+      prisma.submission.findUnique.mockResolvedValue(createSubmission());
+      prisma.documentDefinition.findUnique.mockResolvedValue(null);
+
+      await expect(service.submit(1n, 2n)).rejects.toThrow(NotFoundException);
+
+      expect(submissionsSubmitValidator.validate).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when submission status is not draft', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...createSubmission(),
+        status: 'submitted',
+      });
+      prisma.documentDefinition.findUnique.mockResolvedValue(
+        createDocumentDefinition(),
+      );
+
+      await expect(service.submit(1n, 2n)).rejects.toThrow(BadRequestException);
+
+      expect(submissionsSubmitValidator.validate).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('does not materialize approval route when validation fails', async () => {
+      prisma.submission.findUnique.mockResolvedValue(createSubmission());
+      prisma.documentDefinition.findUnique.mockResolvedValue(
+        createDocumentDefinition(),
+      );
+      tx.departmentMembership.findFirst.mockResolvedValue({
+        departmentId: 1n,
+      });
+
+      submissionsSubmitValidator.validate.mockImplementation(() => {
+        throw new BadRequestException('Required field is missing');
+      });
+
+      await expect(service.submit(1n, 2n)).rejects.toThrow(BadRequestException);
+
+      expect(
+        submissionsApprovalRouteMaterializer.materialize,
+      ).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });

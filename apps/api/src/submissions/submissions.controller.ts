@@ -51,4 +51,9 @@ export class SubmissionsController {
     void user;
     return this.submissionsService.remove(id);
   }
+
+  @Post(':id/submit')
+  submit(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
+    return this.submissionsService.submit(id, user.id);
+  }
 }
