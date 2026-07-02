@@ -112,6 +112,10 @@ export class SubmissionsService {
   }
 
   async findOne(id: bigint) {
+    // TODO: Authorize access to submissions.
+    // A submission should be viewable only by:
+    // - the applicant (createdById)
+    // - users included in any applied approval policy approvers.
     const submission = await this.prisma.submission.findUnique({
       where: { id },
       include: {
@@ -326,6 +330,35 @@ export class SubmissionsService {
           applicantDepartmentId: applicantDepartmentId,
         },
       });
+    });
+  }
+
+  async findApprovable(userId: bigint) {
+    return this.prisma.submission.findMany({
+      where: {
+        status: 'submitted',
+        currentAppliedApprovalPolicy: {
+          status: 'pending',
+          requirements: {
+            some: {
+              status: 'pending',
+              approvers: {
+                some: {
+                  userId,
+                  status: 'pending',
+                },
+              },
+            },
+          },
+        },
+      },
+      include: {
+        documentDefinition: true,
+        createdBy: true,
+      },
+      orderBy: {
+        submittedAt: 'asc',
+      },
     });
   }
 

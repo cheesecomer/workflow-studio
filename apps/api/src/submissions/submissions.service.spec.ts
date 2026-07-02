@@ -541,4 +541,53 @@ describe('SubmissionsService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
+  describe('findApprovable', () => {
+    it('returns submitted submissions that the user can approve', async () => {
+      const submissions = [
+        {
+          id: 1n,
+          status: 'submitted',
+          documentDefinition: {
+            id: 10n,
+            name: '経費申請',
+          },
+          createdBy: {
+            id: 2n,
+            name: '申請者',
+          },
+        },
+      ];
+
+      prisma.submission.findMany.mockResolvedValue(submissions);
+
+      await expect(service.findApprovable(3n)).resolves.toBe(submissions);
+
+      expect(prisma.submission.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'submitted',
+          currentAppliedApprovalPolicy: {
+            status: 'pending',
+            requirements: {
+              some: {
+                status: 'pending',
+                approvers: {
+                  some: {
+                    userId: 3n,
+                    status: 'pending',
+                  },
+                },
+              },
+            },
+          },
+        },
+        include: {
+          documentDefinition: true,
+          createdBy: true,
+        },
+        orderBy: {
+          submittedAt: 'asc',
+        },
+      });
+    });
+  });
 });
