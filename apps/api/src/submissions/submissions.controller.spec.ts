@@ -54,7 +54,10 @@ describe('SubmissionsController', () => {
     it('delegates to service with current user id and submission id', async () => {
       await controller.findOne(currentUser, 1n);
 
-      expect(submissionService.findOne).toHaveBeenCalledWith(1n);
+      expect(submissionService.findOne).toHaveBeenCalledWith(
+        1n,
+        currentUser.id,
+      );
     });
   });
 

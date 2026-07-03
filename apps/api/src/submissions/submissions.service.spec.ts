@@ -32,6 +32,7 @@ describe('SubmissionsService', () => {
 
   const prisma = {
     submission: {
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
       delete: jest.fn(),
@@ -190,13 +191,33 @@ describe('SubmissionsService', () => {
 
   describe('findOne', () => {
     it('returns a submission', async () => {
-      prisma.submission.findUnique.mockResolvedValue(submission);
+      prisma.submission.findFirst.mockResolvedValue(submission);
 
-      await expect(service.findOne(111n)).resolves.toEqual(submission);
+      await expect(service.findOne(111n, 888n)).resolves.toEqual(submission);
 
-      expect(prisma.submission.findUnique).toHaveBeenCalledWith({
+      expect(prisma.submission.findFirst).toHaveBeenCalledWith({
         where: {
           id: 111n,
+          OR: [
+            {
+              createdById: 888n,
+            },
+            {
+              appliedApprovalPolicies: {
+                some: {
+                  requirements: {
+                    some: {
+                      approvers: {
+                        some: {
+                          userId: 888n,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
         },
         include: {
           fieldGroupRows: {
@@ -209,13 +230,35 @@ describe('SubmissionsService', () => {
     });
 
     it('throws NotFoundException when submission does not exist', async () => {
-      prisma.submission.findUnique.mockResolvedValue(null);
+      prisma.submission.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne(999n)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(999n, 888n)).rejects.toThrow(
+        NotFoundException,
+      );
 
-      expect(prisma.submission.findUnique).toHaveBeenCalledWith({
+      expect(prisma.submission.findFirst).toHaveBeenCalledWith({
         where: {
           id: 999n,
+          OR: [
+            {
+              createdById: 888n,
+            },
+            {
+              appliedApprovalPolicies: {
+                some: {
+                  requirements: {
+                    some: {
+                      approvers: {
+                        some: {
+                          userId: 888n,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
         },
         include: {
           fieldGroupRows: {

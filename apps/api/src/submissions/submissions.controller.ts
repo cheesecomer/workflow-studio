@@ -37,8 +37,7 @@ export class SubmissionsController {
 
   @Get(':id')
   findOne(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
-    void user;
-    return this.submissionsService.findOne(id);
+    return this.submissionsService.findOne(id, user.id);
   }
 
   @Patch(':id')
