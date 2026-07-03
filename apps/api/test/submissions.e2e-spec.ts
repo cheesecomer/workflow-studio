@@ -715,4 +715,467 @@ describe('SubmissionsController (e2e)', () => {
       });
     });
   });
+
+  describe('GET /submissions/:id', () => {
+    it('returns a submission to the applicant', async () => {
+      const currentUser = await prisma.user.findUniqueOrThrow({
+        where: { email: 'admin@example.com' },
+      });
+
+      const department = await prisma.department.create({
+        data: {
+          name: 'Engineering',
+        },
+      });
+
+      const position =
+        (await prisma.position.findFirst({
+          where: { name: 'Manager' },
+        })) ??
+        (await prisma.position.create({
+          data: { name: 'Manager', rank: 10 },
+        }));
+
+      const document = await prisma.document.create({
+        data: {
+          name: '経費申請',
+          draftContent: {},
+          publishedContent: {},
+        },
+      });
+
+      const documentDefinition = await prisma.documentDefinition.create({
+        data: {
+          name: '経費申請',
+          documentId: document.id,
+          version: 1,
+          publishedById: currentUser.id,
+        },
+      });
+
+      const submittedSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'submitted',
+          createdById: currentUser.id,
+          submittedById: currentUser.id,
+          applicantDepartmentId: department.id,
+          submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      const approvalPolicy = await prisma.approvalPolicy.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          name: 'Manager approval',
+          operator: 'all',
+          position: 1,
+        },
+      });
+
+      const approvalRequirement = await prisma.approvalRequirement.create({
+        data: {
+          approvalPolicyId: approvalPolicy.id,
+          name: 'Manager',
+          departmentScope: 'same_department',
+          positionOperator: 'eq',
+          positionId: position.id,
+          requiredCount: 1,
+        },
+      });
+
+      const approvableAppliedPolicy = await prisma.appliedApprovalPolicy.create(
+        {
+          data: {
+            submissionId: submittedSubmission.id,
+            approvalPolicyId: approvalPolicy.id,
+            position: 1,
+            status: 'pending',
+          },
+        },
+      );
+
+      await prisma.submission.update({
+        where: { id: submittedSubmission.id },
+        data: {
+          currentAppliedApprovalPolicyId: approvableAppliedPolicy.id,
+        },
+      });
+
+      const approvableAppliedRequirement =
+        await prisma.appliedApprovalRequirement.create({
+          data: {
+            appliedApprovalPolicyId: approvableAppliedPolicy.id,
+            approvalRequirementId: approvalRequirement.id,
+            status: 'pending',
+            requiredCount: 1,
+            approvedCount: 0,
+          },
+        });
+
+      await prisma.approver.create({
+        data: {
+          appliedApprovalRequirementId: approvableAppliedRequirement.id,
+          userId: currentUser.id,
+          status: 'pending',
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/submissions/${submittedSubmission.id}`)
+        .expect(200);
+      expect(response.body).toMatchObject({
+        id: submittedSubmission.id.toString(),
+        documentDefinitionId: documentDefinition.id.toString(),
+        status: 'submitted',
+        fieldGroupRows: [],
+      });
+    });
+
+    it('returns a submission to an approver', async () => {
+      const currentUser = await prisma.user.findUniqueOrThrow({
+        where: { email: 'admin@example.com' },
+      });
+
+      const otherUser =
+        (await prisma.user.findFirst({
+          where: { email: 'other-approver@example.com' },
+        })) ??
+        (await prisma.user.create({
+          data: {
+            email: 'other-approver@example.com',
+            name: 'approver',
+            passwordDigest: 'password',
+          },
+        }));
+
+      const applicant =
+        (await prisma.user.findFirst({
+          where: { email: 'applicant@example.com' },
+        })) ??
+        (await prisma.user.create({
+          data: {
+            email: 'applicant@example.com',
+            name: 'applicant',
+            passwordDigest: 'password',
+          },
+        }));
+
+      const department = await prisma.department.create({
+        data: {
+          name: 'Engineering',
+        },
+      });
+
+      const position =
+        (await prisma.position.findFirst({
+          where: { name: 'Manager' },
+        })) ??
+        (await prisma.position.create({
+          data: { name: 'Manager', rank: 10 },
+        }));
+
+      const document = await prisma.document.create({
+        data: {
+          name: '経費申請',
+          draftContent: {},
+          publishedContent: {},
+        },
+      });
+
+      const documentDefinition = await prisma.documentDefinition.create({
+        data: {
+          name: '経費申請',
+          documentId: document.id,
+          version: 1,
+          publishedById: currentUser.id,
+        },
+      });
+
+      const approvableSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'submitted',
+          createdById: applicant.id,
+          submittedById: applicant.id,
+          applicantDepartmentId: department.id,
+          submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      const notApprovableSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'submitted',
+          createdById: applicant.id,
+          submittedById: applicant.id,
+          applicantDepartmentId: department.id,
+          submittedAt: new Date('2026-01-02T00:00:00.000Z'),
+        },
+      });
+
+      const approvedSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'approved',
+          createdById: applicant.id,
+          submittedById: applicant.id,
+          applicantDepartmentId: department.id,
+          submittedAt: new Date('2026-01-03T00:00:00.000Z'),
+          approvedAt: new Date('2026-01-04T00:00:00.000Z'),
+        },
+      });
+
+      const approvalPolicy = await prisma.approvalPolicy.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          name: 'Manager approval',
+          operator: 'all',
+          position: 1,
+        },
+      });
+
+      const approvalRequirement = await prisma.approvalRequirement.create({
+        data: {
+          approvalPolicyId: approvalPolicy.id,
+          name: 'Manager',
+          departmentScope: 'same_department',
+          positionOperator: 'eq',
+          positionId: position.id,
+          requiredCount: 1,
+        },
+      });
+
+      const approvableAppliedPolicy = await prisma.appliedApprovalPolicy.create(
+        {
+          data: {
+            submissionId: approvableSubmission.id,
+            approvalPolicyId: approvalPolicy.id,
+            position: 1,
+            status: 'pending',
+          },
+        },
+      );
+
+      await prisma.submission.update({
+        where: { id: approvableSubmission.id },
+        data: {
+          currentAppliedApprovalPolicyId: approvableAppliedPolicy.id,
+        },
+      });
+
+      const approvableAppliedRequirement =
+        await prisma.appliedApprovalRequirement.create({
+          data: {
+            appliedApprovalPolicyId: approvableAppliedPolicy.id,
+            approvalRequirementId: approvalRequirement.id,
+            status: 'pending',
+            requiredCount: 1,
+            approvedCount: 0,
+          },
+        });
+
+      await prisma.approver.create({
+        data: {
+          appliedApprovalRequirementId: approvableAppliedRequirement.id,
+          userId: currentUser.id,
+          status: 'pending',
+        },
+      });
+
+      const notApprovableAppliedPolicy =
+        await prisma.appliedApprovalPolicy.create({
+          data: {
+            submissionId: notApprovableSubmission.id,
+            approvalPolicyId: approvalPolicy.id,
+            position: 1,
+            status: 'pending',
+          },
+        });
+
+      await prisma.submission.update({
+        where: { id: notApprovableSubmission.id },
+        data: {
+          currentAppliedApprovalPolicyId: notApprovableAppliedPolicy.id,
+        },
+      });
+
+      const notApprovableAppliedRequirement =
+        await prisma.appliedApprovalRequirement.create({
+          data: {
+            appliedApprovalPolicyId: notApprovableAppliedPolicy.id,
+            approvalRequirementId: approvalRequirement.id,
+            status: 'pending',
+            requiredCount: 1,
+            approvedCount: 0,
+          },
+        });
+
+      await prisma.approver.create({
+        data: {
+          appliedApprovalRequirementId: notApprovableAppliedRequirement.id,
+          userId: otherUser.id,
+          status: 'pending',
+        },
+      });
+
+      const approvedAppliedPolicy = await prisma.appliedApprovalPolicy.create({
+        data: {
+          submissionId: approvedSubmission.id,
+          approvalPolicyId: approvalPolicy.id,
+          position: 1,
+          status: 'approved',
+          approvedAt: new Date('2026-01-04T00:00:00.000Z'),
+        },
+      });
+
+      await prisma.submission.update({
+        where: { id: approvedSubmission.id },
+        data: {
+          currentAppliedApprovalPolicyId: approvedAppliedPolicy.id,
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/submissions/${approvableSubmission.id}`)
+        .expect(200);
+      expect(response.body).toMatchObject({
+        id: approvableSubmission.id.toString(),
+        documentDefinitionId: documentDefinition.id.toString(),
+        status: 'submitted',
+        fieldGroupRows: [],
+      });
+    });
+    it('throws NotFoundException when the user cannot access the submission', async () => {
+      const currentUser = await prisma.user.findUniqueOrThrow({
+        where: { email: 'admin@example.com' },
+      });
+
+      const approver =
+        (await prisma.user.findFirst({
+          where: { email: 'approver@example.com' },
+        })) ??
+        (await prisma.user.create({
+          data: {
+            email: 'approver@example.com',
+            name: 'approver',
+            passwordDigest: 'password',
+          },
+        }));
+
+      const applicant =
+        (await prisma.user.findFirst({
+          where: { email: 'applicant@example.com' },
+        })) ??
+        (await prisma.user.create({
+          data: {
+            email: 'applicant@example.com',
+            name: 'applicant',
+            passwordDigest: 'password',
+          },
+        }));
+
+      const department = await prisma.department.create({
+        data: {
+          name: 'Engineering',
+        },
+      });
+
+      const position =
+        (await prisma.position.findFirst({
+          where: { name: 'Manager' },
+        })) ??
+        (await prisma.position.create({
+          data: { name: 'Manager', rank: 10 },
+        }));
+
+      const document = await prisma.document.create({
+        data: {
+          name: '経費申請',
+          draftContent: {},
+          publishedContent: {},
+        },
+      });
+
+      const documentDefinition = await prisma.documentDefinition.create({
+        data: {
+          name: '経費申請',
+          documentId: document.id,
+          version: 1,
+          publishedById: currentUser.id,
+        },
+      });
+
+      const notApprovableSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'submitted',
+          createdById: approver.id,
+          submittedById: approver.id,
+          applicantDepartmentId: department.id,
+          submittedAt: new Date('2026-01-02T00:00:00.000Z'),
+        },
+      });
+
+      const approvalPolicy = await prisma.approvalPolicy.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          name: 'Manager approval',
+          operator: 'all',
+          position: 1,
+        },
+      });
+
+      const approvalRequirement = await prisma.approvalRequirement.create({
+        data: {
+          approvalPolicyId: approvalPolicy.id,
+          name: 'Manager',
+          departmentScope: 'same_department',
+          positionOperator: 'eq',
+          positionId: position.id,
+          requiredCount: 1,
+        },
+      });
+
+      const notApprovableAppliedPolicy =
+        await prisma.appliedApprovalPolicy.create({
+          data: {
+            submissionId: notApprovableSubmission.id,
+            approvalPolicyId: approvalPolicy.id,
+            position: 1,
+            status: 'pending',
+          },
+        });
+
+      await prisma.submission.update({
+        where: { id: notApprovableSubmission.id },
+        data: {
+          currentAppliedApprovalPolicyId: notApprovableAppliedPolicy.id,
+        },
+      });
+
+      const notApprovableAppliedRequirement =
+        await prisma.appliedApprovalRequirement.create({
+          data: {
+            appliedApprovalPolicyId: notApprovableAppliedPolicy.id,
+            approvalRequirementId: approvalRequirement.id,
+            status: 'pending',
+            requiredCount: 1,
+            approvedCount: 0,
+          },
+        });
+
+      await prisma.approver.create({
+        data: {
+          appliedApprovalRequirementId: notApprovableAppliedRequirement.id,
+          userId: applicant.id,
+          status: 'pending',
+        },
+      });
+
+      await request(app.getHttpServer())
+        .get(`/submissions/${notApprovableSubmission.id}`)
+        .expect(404);
+    });
+  });
 });
