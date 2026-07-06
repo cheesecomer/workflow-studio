@@ -806,7 +806,9 @@ describe('SubmissionsService', () => {
         currentAppliedApprovalPolicyId: null,
       });
 
-      const result = await service.approve(1n, 3n);
+      const result = await service.approve(1n, 3n, {
+        comment: 'Looks good',
+      });
 
       expect(tx.approver.updateMany).toHaveBeenCalledWith({
         where: {
@@ -835,6 +837,7 @@ describe('SubmissionsService', () => {
           approverId: 500n,
           actorId: 3n,
           decision: 'approved',
+          comment: 'Looks good',
           decidedAt,
         },
       });
@@ -1105,7 +1108,9 @@ describe('SubmissionsService', () => {
         currentAppliedApprovalPolicyId: null,
       });
 
-      const result = await service.reject(1n, 3n);
+      const result = await service.reject(1n, 3n, {
+        comment: 'Please fix amount',
+      });
 
       expect(tx.approver.updateMany).toHaveBeenCalledWith({
         where: {
@@ -1134,6 +1139,7 @@ describe('SubmissionsService', () => {
           approverId: 500n,
           actorId: 3n,
           decision: 'rejected',
+          comment: 'Please fix amount',
           decidedAt,
         },
       });

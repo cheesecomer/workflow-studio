@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
+import { ApproveSubmissionDto } from './dto/approve-submission.dto';
+import { RejectSubmissionDto } from './dto/reject-submission.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionsSubmitValidator } from './submissions-submit.validator';
 import { SubmissionsApprovalRouteMaterializer } from './submissions-approval-route.materializer';
@@ -400,7 +402,11 @@ export class SubmissionsService {
     });
   }
 
-  async approve(id: bigint, actorId: bigint) {
+  async approve(
+    id: bigint,
+    actorId: bigint,
+    approveSubmissionDto: ApproveSubmissionDto = {},
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const decidedAt = new Date();
       const submission = await this.findSubmissionForApprovalAction(tx, id);
@@ -477,6 +483,7 @@ export class SubmissionsService {
           approverId: currentApprover.approver.id,
           actorId,
           decision: 'approved',
+          comment: approveSubmissionDto.comment,
           decidedAt,
         },
       });
@@ -546,7 +553,11 @@ export class SubmissionsService {
     });
   }
 
-  async reject(id: bigint, actorId: bigint) {
+  async reject(
+    id: bigint,
+    actorId: bigint,
+    rejectSubmissionDto: RejectSubmissionDto = {},
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const decidedAt = new Date();
       const submission = await this.findSubmissionForApprovalAction(tx, id);
@@ -588,6 +599,7 @@ export class SubmissionsService {
           approverId: currentApprover.approver.id,
           actorId,
           decision: 'rejected',
+          comment: rejectSubmissionDto.comment,
           decidedAt,
         },
       });

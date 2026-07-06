@@ -110,20 +110,27 @@ describe('SubmissionsController', () => {
 
   describe('approve', () => {
     it('delegates to service with current user id and submission id', async () => {
-      await controller.approve(currentUser, 1n);
+      const dto = { comment: 'Looks good' };
+      await controller.approve(currentUser, 1n, dto);
 
       expect(submissionService.approve).toHaveBeenCalledWith(
         1n,
         currentUser.id,
+        dto,
       );
     });
   });
 
   describe('reject', () => {
     it('delegates to service with current user id and submission id', async () => {
-      await controller.reject(currentUser, 1n);
+      const dto = { comment: 'Please fix amount' };
+      await controller.reject(currentUser, 1n, dto);
 
-      expect(submissionService.reject).toHaveBeenCalledWith(1n, currentUser.id);
+      expect(submissionService.reject).toHaveBeenCalledWith(
+        1n,
+        currentUser.id,
+        dto,
+      );
     });
   });
 
