@@ -248,6 +248,50 @@ describe('SubmissionsService', () => {
               fieldValues: true,
             },
           },
+          appliedApprovalPolicies: {
+            include: {
+              approvalPolicy: true,
+              requirements: {
+                include: {
+                  approvalRequirement: true,
+                  approvers: {
+                    include: {
+                      user: {
+                        select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                        },
+                      },
+                      decisions: {
+                        include: {
+                          actor: {
+                            select: {
+                              id: true,
+                              name: true,
+                              email: true,
+                            },
+                          },
+                        },
+                        orderBy: {
+                          decidedAt: 'asc',
+                        },
+                      },
+                    },
+                    orderBy: {
+                      id: 'asc',
+                    },
+                  },
+                },
+                orderBy: {
+                  id: 'asc',
+                },
+              },
+            },
+            orderBy: {
+              position: 'asc',
+            },
+          },
         },
       });
     });
@@ -287,6 +331,50 @@ describe('SubmissionsService', () => {
           fieldGroupRows: {
             include: {
               fieldValues: true,
+            },
+          },
+          appliedApprovalPolicies: {
+            include: {
+              approvalPolicy: true,
+              requirements: {
+                include: {
+                  approvalRequirement: true,
+                  approvers: {
+                    include: {
+                      user: {
+                        select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                        },
+                      },
+                      decisions: {
+                        include: {
+                          actor: {
+                            select: {
+                              id: true,
+                              name: true,
+                              email: true,
+                            },
+                          },
+                        },
+                        orderBy: {
+                          decidedAt: 'asc',
+                        },
+                      },
+                    },
+                    orderBy: {
+                      id: 'asc',
+                    },
+                  },
+                },
+                orderBy: {
+                  id: 'asc',
+                },
+              },
+            },
+            orderBy: {
+              position: 'asc',
             },
           },
         },

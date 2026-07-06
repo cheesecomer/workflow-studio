@@ -829,7 +829,62 @@ describe('SubmissionsController (e2e)', () => {
         documentDefinitionId: documentDefinition.id.toString(),
         status: 'submitted',
         fieldGroupRows: [],
+        appliedApprovalPolicies: [
+          {
+            id: approvableAppliedPolicy.id.toString(),
+            approvalPolicyId: approvalPolicy.id.toString(),
+            position: 1,
+            status: 'pending',
+            approvalPolicy: {
+              id: approvalPolicy.id.toString(),
+              name: 'Manager approval',
+              operator: 'all',
+            },
+            requirements: [
+              {
+                id: approvableAppliedRequirement.id.toString(),
+                approvalRequirementId: approvalRequirement.id.toString(),
+                status: 'pending',
+                requiredCount: 1,
+                approvedCount: 0,
+                approvalRequirement: {
+                  id: approvalRequirement.id.toString(),
+                  name: 'Manager',
+                },
+                approvers: [
+                  {
+                    userId: currentUser.id.toString(),
+                    status: 'pending',
+                    user: {
+                      id: currentUser.id.toString(),
+                      name: currentUser.name,
+                      email: currentUser.email,
+                    },
+                    decisions: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       });
+      const body = response.body as {
+        appliedApprovalPolicies: {
+          requirements: {
+            approvers: {
+              user: {
+                id: string;
+                name: string;
+                email: string;
+              };
+            }[];
+          }[];
+        }[];
+      };
+
+      expect(
+        body.appliedApprovalPolicies[0].requirements[0].approvers[0].user,
+      ).not.toHaveProperty('passwordDigest');
     });
 
     it('returns a submission to an approver', async () => {
@@ -1044,6 +1099,31 @@ describe('SubmissionsController (e2e)', () => {
         documentDefinitionId: documentDefinition.id.toString(),
         status: 'submitted',
         fieldGroupRows: [],
+        appliedApprovalPolicies: [
+          {
+            id: approvableAppliedPolicy.id.toString(),
+            approvalPolicyId: approvalPolicy.id.toString(),
+            position: 1,
+            status: 'pending',
+            requirements: [
+              {
+                id: approvableAppliedRequirement.id.toString(),
+                status: 'pending',
+                approvers: [
+                  {
+                    userId: currentUser.id.toString(),
+                    status: 'pending',
+                    user: {
+                      id: currentUser.id.toString(),
+                      name: currentUser.name,
+                      email: currentUser.email,
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       });
     });
     it('throws NotFoundException when the user cannot access the submission', async () => {
