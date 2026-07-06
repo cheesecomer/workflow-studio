@@ -1184,6 +1184,7 @@ describe('SubmissionsController (e2e)', () => {
       approverId?: bigint;
       applicantId?: bigint;
       status?: 'draft' | 'submitted' | 'approved' | 'rejected' | 'withdrawn';
+      operator?: 'all' | 'any';
     }) => {
       const currentUser = await prisma.user.findUniqueOrThrow({
         where: { email: 'admin@example.com' },
@@ -1232,7 +1233,7 @@ describe('SubmissionsController (e2e)', () => {
         data: {
           documentDefinitionId: documentDefinition.id,
           name: 'Manager approval',
-          operator: 'all',
+          operator: params?.operator ?? 'all',
           position: 1,
         },
       });
@@ -1384,6 +1385,41 @@ describe('SubmissionsController (e2e)', () => {
       await expect(
         prisma.approver.findUniqueOrThrow({
           where: { id: appliedApprover.id },
+        }),
+      ).resolves.toMatchObject({
+        status: 'skipped',
+      });
+    });
+
+    it('skips remaining pending approvers when any approval policy is approved', async () => {
+      const otherUser = await prisma.user.upsert({
+        where: { email: 'approval-action-any-other@example.com' },
+        update: {},
+        create: {
+          email: 'approval-action-any-other@example.com',
+          name: 'other approver',
+          passwordDigest: 'password',
+        },
+      });
+      const { submission, appliedRequirement } =
+        await createApprovalActionFixture({
+          operator: 'any',
+        });
+      const otherApprover = await prisma.approver.create({
+        data: {
+          appliedApprovalRequirementId: appliedRequirement.id,
+          userId: otherUser.id,
+          status: 'pending',
+        },
+      });
+
+      await request(app.getHttpServer())
+        .post(`/submissions/${submission.id.toString()}/approve`)
+        .expect(201);
+
+      await expect(
+        prisma.approver.findUniqueOrThrow({
+          where: { id: otherApprover.id },
         }),
       ).resolves.toMatchObject({
         status: 'skipped',
