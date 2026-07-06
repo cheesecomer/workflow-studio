@@ -885,6 +885,56 @@ describe('SubmissionsService', () => {
       });
     });
 
+    it('skips remaining pending approvers when any approval policy is approved', async () => {
+      const submission = createSubmittedSubmissionForApproval();
+      submission.currentAppliedApprovalPolicy.approvalPolicy.operator = 'any';
+      submission.currentAppliedApprovalPolicy.requirements[0].approvers.push({
+        id: 501n,
+        appliedApprovalRequirementId: 300n,
+        userId: 4n,
+        status: 'pending',
+        decidedAt: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        deletedAt: null,
+      });
+      tx.submission.findUnique.mockResolvedValue(submission);
+      tx.approver.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.findUniqueOrThrow.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        status: 'pending',
+        approvedCount: 1,
+      });
+      tx.appliedApprovalRequirement.update.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        status: 'approved',
+        approvedCount: 1,
+        approvedAt: decidedAt,
+      });
+      tx.appliedApprovalPolicy.findFirst.mockResolvedValue(null);
+      tx.submission.update.mockResolvedValue({
+        ...submission,
+        status: 'approved',
+        approvedAt: decidedAt,
+        currentAppliedApprovalPolicyId: null,
+      });
+
+      await service.approve(1n, 3n);
+
+      expect(tx.approver.updateMany).toHaveBeenNthCalledWith(2, {
+        where: {
+          status: 'pending',
+          appliedApprovalRequirement: {
+            appliedApprovalPolicyId: 100n,
+          },
+        },
+        data: {
+          status: 'skipped',
+        },
+      });
+    });
+
     it('throws ForbiddenException when user is not current approver', async () => {
       tx.submission.findUnique.mockResolvedValue(
         createSubmittedSubmissionForApproval(),

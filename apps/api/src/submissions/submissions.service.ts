@@ -455,6 +455,20 @@ export class SubmissionsService {
         },
       });
 
+      if (currentPolicy.approvalPolicy.operator === 'any') {
+        await tx.approver.updateMany({
+          where: {
+            status: 'pending',
+            appliedApprovalRequirement: {
+              appliedApprovalPolicyId: currentPolicy.id,
+            },
+          },
+          data: {
+            status: 'skipped',
+          },
+        });
+      }
+
       const nextAppliedPolicy = await tx.appliedApprovalPolicy.findFirst({
         where: {
           submissionId: id,
