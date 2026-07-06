@@ -1394,6 +1394,9 @@ describe('SubmissionsController (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post(`/submissions/${submission.id.toString()}/approve`)
+        .send({
+          comment: 'Looks good',
+        })
         .expect(201);
 
       expect(response.body).toMatchObject({
@@ -1419,6 +1422,7 @@ describe('SubmissionsController (e2e)', () => {
         }),
       ).resolves.toMatchObject({
         decision: 'approved',
+        comment: 'Looks good',
       });
     });
 
@@ -1428,6 +1432,9 @@ describe('SubmissionsController (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post(`/submissions/${submission.id.toString()}/reject`)
+        .send({
+          comment: 'Please fix amount',
+        })
         .expect(201);
 
       expect(response.body).toMatchObject({
@@ -1445,6 +1452,7 @@ describe('SubmissionsController (e2e)', () => {
         }),
       ).resolves.toMatchObject({
         decision: 'rejected',
+        comment: 'Please fix amount',
       });
     });
 

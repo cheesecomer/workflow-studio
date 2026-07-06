@@ -10,6 +10,8 @@ import {
 import { SubmissionsService } from './submissions.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
+import { ApproveSubmissionDto } from './dto/approve-submission.dto';
+import { RejectSubmissionDto } from './dto/reject-submission.dto';
 import type { CurrentUser } from '../auth/current-user';
 import { CurrentUser as CurrentUserDecorator } from '../auth/current-user.decorator';
 
@@ -62,13 +64,21 @@ export class SubmissionsController {
   }
 
   @Post(':id/approve')
-  approve(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
-    return this.submissionsService.approve(id, user.id);
+  approve(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Param('id') id: bigint,
+    @Body() approveSubmissionDto: ApproveSubmissionDto,
+  ) {
+    return this.submissionsService.approve(id, user.id, approveSubmissionDto);
   }
 
   @Post(':id/reject')
-  reject(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
-    return this.submissionsService.reject(id, user.id);
+  reject(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Param('id') id: bigint,
+    @Body() rejectSubmissionDto: RejectSubmissionDto,
+  ) {
+    return this.submissionsService.reject(id, user.id, rejectSubmissionDto);
   }
 
   @Post(':id/withdraw')
