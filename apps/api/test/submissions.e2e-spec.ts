@@ -28,10 +28,10 @@ describe('SubmissionsController (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.approvalDecision.deleteMany();
     await prisma.approver.deleteMany();
     await prisma.appliedApprovalRequirement.deleteMany();
     await prisma.appliedApprovalPolicy.deleteMany();
-    await prisma.approvalDecision.deleteMany();
     await prisma.approvalRequirement.deleteMany();
     await prisma.approvalPolicy.deleteMany();
     await prisma.submissionFieldValue.deleteMany();
@@ -1176,6 +1176,266 @@ describe('SubmissionsController (e2e)', () => {
       await request(app.getHttpServer())
         .get(`/submissions/${notApprovableSubmission.id}`)
         .expect(404);
+    });
+  });
+
+  describe('approval actions', () => {
+    const createApprovalActionFixture = async (params?: {
+      approverId?: bigint;
+      applicantId?: bigint;
+      status?: 'draft' | 'submitted' | 'approved' | 'rejected' | 'withdrawn';
+    }) => {
+      const currentUser = await prisma.user.findUniqueOrThrow({
+        where: { email: 'admin@example.com' },
+      });
+
+      const applicant =
+        params?.applicantId === undefined
+          ? currentUser
+          : await prisma.user.findUniqueOrThrow({
+              where: { id: params.applicantId },
+            });
+
+      const approver =
+        params?.approverId === undefined
+          ? currentUser
+          : await prisma.user.findUniqueOrThrow({
+              where: { id: params.approverId },
+            });
+
+      const department = await prisma.department.create({
+        data: { name: 'Approval action department' },
+      });
+
+      const position = await prisma.position.create({
+        data: { name: 'Approval action manager', rank: 1000 },
+      });
+
+      const document = await prisma.document.create({
+        data: {
+          name: '経費申請',
+          draftContent: {},
+          publishedContent: {},
+        },
+      });
+
+      const documentDefinition = await prisma.documentDefinition.create({
+        data: {
+          name: '経費申請',
+          documentId: document.id,
+          version: 1,
+          publishedById: currentUser.id,
+        },
+      });
+
+      const approvalPolicy = await prisma.approvalPolicy.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          name: 'Manager approval',
+          operator: 'all',
+          position: 1,
+        },
+      });
+
+      const approvalRequirement = await prisma.approvalRequirement.create({
+        data: {
+          approvalPolicyId: approvalPolicy.id,
+          name: 'Manager',
+          departmentScope: 'same_department',
+          positionOperator: 'eq',
+          positionId: position.id,
+          requiredCount: 1,
+        },
+      });
+
+      const status = params?.status ?? 'submitted';
+      const submission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status,
+          createdById: applicant.id,
+          submittedById: status === 'draft' ? null : applicant.id,
+          applicantDepartmentId: status === 'draft' ? null : department.id,
+          submittedAt:
+            status === 'draft' ? null : new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      const appliedPolicy = await prisma.appliedApprovalPolicy.create({
+        data: {
+          submissionId: submission.id,
+          approvalPolicyId: approvalPolicy.id,
+          position: 1,
+          status: 'pending',
+        },
+      });
+
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: {
+          currentAppliedApprovalPolicyId:
+            status === 'submitted' ? appliedPolicy.id : null,
+        },
+      });
+
+      const appliedRequirement = await prisma.appliedApprovalRequirement.create(
+        {
+          data: {
+            appliedApprovalPolicyId: appliedPolicy.id,
+            approvalRequirementId: approvalRequirement.id,
+            status: 'pending',
+            requiredCount: 1,
+            approvedCount: 0,
+          },
+        },
+      );
+
+      const appliedApprover = await prisma.approver.create({
+        data: {
+          appliedApprovalRequirementId: appliedRequirement.id,
+          userId: approver.id,
+          status: 'pending',
+        },
+      });
+
+      return {
+        currentUser,
+        submission,
+        appliedPolicy,
+        appliedRequirement,
+        appliedApprover,
+      };
+    };
+
+    it('approves a submitted submission by the current approver', async () => {
+      const { currentUser, submission, appliedApprover } =
+        await createApprovalActionFixture();
+
+      const response = await request(app.getHttpServer())
+        .post(`/submissions/${submission.id.toString()}/approve`)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        id: submission.id.toString(),
+        status: 'approved',
+        currentAppliedApprovalPolicyId: null,
+      });
+
+      await expect(
+        prisma.approver.findUniqueOrThrow({
+          where: { id: appliedApprover.id },
+        }),
+      ).resolves.toMatchObject({
+        status: 'approved',
+      });
+
+      await expect(
+        prisma.approvalDecision.findFirstOrThrow({
+          where: {
+            approverId: appliedApprover.id,
+            actorId: currentUser.id,
+          },
+        }),
+      ).resolves.toMatchObject({
+        decision: 'approved',
+      });
+    });
+
+    it('rejects a submitted submission by the current approver', async () => {
+      const { currentUser, submission, appliedApprover } =
+        await createApprovalActionFixture();
+
+      const response = await request(app.getHttpServer())
+        .post(`/submissions/${submission.id.toString()}/reject`)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        id: submission.id.toString(),
+        status: 'rejected',
+        currentAppliedApprovalPolicyId: null,
+      });
+
+      await expect(
+        prisma.approvalDecision.findFirstOrThrow({
+          where: {
+            approverId: appliedApprover.id,
+            actorId: currentUser.id,
+          },
+        }),
+      ).resolves.toMatchObject({
+        decision: 'rejected',
+      });
+    });
+
+    it('withdraws a submitted submission by the applicant', async () => {
+      const { submission, appliedApprover } =
+        await createApprovalActionFixture();
+
+      const response = await request(app.getHttpServer())
+        .post(`/submissions/${submission.id.toString()}/withdraw`)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        id: submission.id.toString(),
+        status: 'withdrawn',
+        currentAppliedApprovalPolicyId: null,
+      });
+
+      await expect(
+        prisma.approver.findUniqueOrThrow({
+          where: { id: appliedApprover.id },
+        }),
+      ).resolves.toMatchObject({
+        status: 'skipped',
+      });
+    });
+
+    it('does not approve when the current user is not the current approver', async () => {
+      const otherUser = await prisma.user.upsert({
+        where: { email: 'approval-action-other@example.com' },
+        update: {},
+        create: {
+          email: 'approval-action-other@example.com',
+          name: 'other',
+          passwordDigest: 'password',
+        },
+      });
+      const { submission } = await createApprovalActionFixture({
+        approverId: otherUser.id,
+      });
+
+      await request(app.getHttpServer())
+        .post(`/submissions/${submission.id.toString()}/approve`)
+        .expect(403);
+    });
+
+    it('does not approve a submission that is not submitted', async () => {
+      const { submission } = await createApprovalActionFixture({
+        status: 'approved',
+      });
+
+      await request(app.getHttpServer())
+        .post(`/submissions/${submission.id.toString()}/approve`)
+        .expect(400);
+    });
+
+    it('does not withdraw another user submission', async () => {
+      const otherUser = await prisma.user.upsert({
+        where: { email: 'approval-action-applicant@example.com' },
+        update: {},
+        create: {
+          email: 'approval-action-applicant@example.com',
+          name: 'applicant',
+          passwordDigest: 'password',
+        },
+      });
+      const { submission } = await createApprovalActionFixture({
+        applicantId: otherUser.id,
+      });
+
+      await request(app.getHttpServer())
+        .post(`/submissions/${submission.id.toString()}/withdraw`)
+        .expect(403);
     });
   });
 });

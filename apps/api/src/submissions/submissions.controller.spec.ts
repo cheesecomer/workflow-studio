@@ -15,6 +15,9 @@ describe('SubmissionsController', () => {
     update: jest.fn(),
     remove: jest.fn(),
     submit: jest.fn(),
+    approve: jest.fn(),
+    reject: jest.fn(),
+    withdraw: jest.fn(),
     findApprovable: jest.fn(),
   };
 
@@ -102,6 +105,36 @@ describe('SubmissionsController', () => {
       await controller.submit(currentUser, 1n);
 
       expect(submissionService.submit).toHaveBeenCalledWith(1n, currentUser.id);
+    });
+  });
+
+  describe('approve', () => {
+    it('delegates to service with current user id and submission id', async () => {
+      await controller.approve(currentUser, 1n);
+
+      expect(submissionService.approve).toHaveBeenCalledWith(
+        1n,
+        currentUser.id,
+      );
+    });
+  });
+
+  describe('reject', () => {
+    it('delegates to service with current user id and submission id', async () => {
+      await controller.reject(currentUser, 1n);
+
+      expect(submissionService.reject).toHaveBeenCalledWith(1n, currentUser.id);
+    });
+  });
+
+  describe('withdraw', () => {
+    it('delegates to service with current user id and submission id', async () => {
+      await controller.withdraw(currentUser, 1n);
+
+      expect(submissionService.withdraw).toHaveBeenCalledWith(
+        1n,
+        currentUser.id,
+      );
     });
   });
 

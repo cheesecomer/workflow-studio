@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +21,22 @@ describe('SubmissionsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
+    },
+    appliedApprovalPolicy: {
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+    appliedApprovalRequirement: {
+      findUniqueOrThrow: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    approver: {
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    approvalDecision: {
+      create: jest.fn(),
     },
     submissionFieldGroupRow: {
       create: jest.fn(),
@@ -72,7 +92,10 @@ describe('SubmissionsService', () => {
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    prisma.$transaction.mockImplementation(
+      (callback: (transaction: typeof tx) => unknown) => callback(tx),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -493,14 +516,14 @@ describe('SubmissionsService', () => {
       tx.submission.update.mockResolvedValue({
         ...submission,
         status: 'submitted',
-        submittedById: 2n,
+        submittedById: 1n,
         submittedAt,
         currentAppliedApprovalPolicyId: 1000n,
       });
 
       submissionsApprovalRouteMaterializer.materialize.mockResolvedValue(1000n);
 
-      const result = await service.submit(1n, 2n);
+      const result = await service.submit(1n, 1n);
 
       expect(submissionsSubmitValidator.validate).toHaveBeenCalledWith(
         submission,
@@ -520,7 +543,7 @@ describe('SubmissionsService', () => {
         where: { id: 1n },
         data: {
           status: 'submitted',
-          submittedById: 2n,
+          submittedById: 1n,
           submittedAt,
           applicantDepartmentId,
           currentAppliedApprovalPolicyId: 1000n,
@@ -533,7 +556,7 @@ describe('SubmissionsService', () => {
     it('throws NotFoundException when submission does not exist', async () => {
       prisma.submission.findUnique.mockResolvedValue(null);
 
-      await expect(service.submit(1n, 2n)).rejects.toThrow(NotFoundException);
+      await expect(service.submit(1n, 1n)).rejects.toThrow(NotFoundException);
 
       expect(prisma.documentDefinition.findUnique).not.toHaveBeenCalled();
       expect(submissionsSubmitValidator.validate).not.toHaveBeenCalled();
@@ -543,7 +566,7 @@ describe('SubmissionsService', () => {
       prisma.submission.findUnique.mockResolvedValue(createSubmission());
       prisma.documentDefinition.findUnique.mockResolvedValue(null);
 
-      await expect(service.submit(1n, 2n)).rejects.toThrow(NotFoundException);
+      await expect(service.submit(1n, 1n)).rejects.toThrow(NotFoundException);
 
       expect(submissionsSubmitValidator.validate).not.toHaveBeenCalled();
     });
@@ -553,11 +576,20 @@ describe('SubmissionsService', () => {
         ...createSubmission(),
         status: 'submitted',
       });
-      prisma.documentDefinition.findUnique.mockResolvedValue(
-        createDocumentDefinition(),
-      );
 
-      await expect(service.submit(1n, 2n)).rejects.toThrow(BadRequestException);
+      await expect(service.submit(1n, 1n)).rejects.toThrow(BadRequestException);
+
+      expect(submissionsSubmitValidator.validate).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when user is not the submission creator', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...createSubmission(),
+        createdById: 1n,
+      });
+
+      await expect(service.submit(1n, 2n)).rejects.toThrow(ForbiddenException);
 
       expect(submissionsSubmitValidator.validate).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -576,7 +608,7 @@ describe('SubmissionsService', () => {
         throw new BadRequestException('Required field is missing');
       });
 
-      await expect(service.submit(1n, 2n)).rejects.toThrow(BadRequestException);
+      await expect(service.submit(1n, 1n)).rejects.toThrow(BadRequestException);
 
       expect(
         submissionsApprovalRouteMaterializer.materialize,
@@ -584,6 +616,521 @@ describe('SubmissionsService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
+
+  const createSubmittedSubmissionForApproval = () => ({
+    id: 1n,
+    documentDefinitionId: 10n,
+    createdById: 2n,
+    submittedById: 2n,
+    applicantDepartmentId: 1n,
+    status: 'submitted',
+    currentAppliedApprovalPolicyId: 100n,
+    submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+    approvedAt: null,
+    rejectedAt: null,
+    withdrawnAt: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    currentAppliedApprovalPolicy: {
+      id: 100n,
+      submissionId: 1n,
+      approvalPolicyId: 200n,
+      position: 1,
+      status: 'pending',
+      approvedAt: null,
+      rejectedAt: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      deletedAt: null,
+      approvalPolicy: {
+        id: 200n,
+        documentDefinitionId: 10n,
+        name: 'Manager approval',
+        condition: null,
+        operator: 'all',
+        position: 1,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        deletedAt: null,
+      },
+      requirements: [
+        {
+          id: 300n,
+          appliedApprovalPolicyId: 100n,
+          approvalRequirementId: 400n,
+          status: 'pending',
+          requiredCount: 1,
+          approvedCount: 0,
+          approvedAt: null,
+          rejectedAt: null,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          deletedAt: null,
+          approvers: [
+            {
+              id: 500n,
+              appliedApprovalRequirementId: 300n,
+              userId: 3n,
+              status: 'pending',
+              decidedAt: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              deletedAt: null,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  describe('approve', () => {
+    const decidedAt = new Date('2026-01-02T00:00:00.000Z');
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(decidedAt);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('approves current approver step and completes final submission', async () => {
+      const submission = createSubmittedSubmissionForApproval();
+      tx.submission.findUnique.mockResolvedValue(submission);
+      tx.approver.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.findUniqueOrThrow.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        approvedCount: 1,
+      });
+      tx.appliedApprovalRequirement.update.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        status: 'approved',
+        approvedCount: 1,
+        approvedAt: decidedAt,
+      });
+      tx.appliedApprovalPolicy.findFirst.mockResolvedValue(null);
+      tx.submission.update.mockResolvedValue({
+        ...submission,
+        status: 'approved',
+        approvedAt: decidedAt,
+        currentAppliedApprovalPolicyId: null,
+      });
+
+      const result = await service.approve(1n, 3n);
+
+      expect(tx.approver.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 500n,
+          status: 'pending',
+          appliedApprovalRequirement: {
+            status: 'pending',
+            appliedApprovalPolicy: {
+              id: 100n,
+              status: 'pending',
+              submission: {
+                id: 1n,
+                status: 'submitted',
+                currentAppliedApprovalPolicyId: 100n,
+              },
+            },
+          },
+        },
+        data: {
+          status: 'approved',
+          decidedAt,
+        },
+      });
+      expect(tx.approvalDecision.create).toHaveBeenCalledWith({
+        data: {
+          approverId: 500n,
+          actorId: 3n,
+          decision: 'approved',
+          decidedAt,
+        },
+      });
+      expect(tx.appliedApprovalRequirement.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 300n,
+          status: 'pending',
+          approvedCount: {
+            lt: 1,
+          },
+        },
+        data: {
+          approvedCount: {
+            increment: 1,
+          },
+        },
+      });
+      expect(
+        tx.appliedApprovalRequirement.findUniqueOrThrow,
+      ).toHaveBeenCalledWith({
+        where: { id: 300n },
+      });
+      expect(tx.appliedApprovalRequirement.update).toHaveBeenCalledWith({
+        where: { id: 300n },
+        data: {
+          status: 'approved',
+          approvedAt: decidedAt,
+        },
+      });
+      expect(tx.appliedApprovalPolicy.update).toHaveBeenCalledWith({
+        where: { id: 100n },
+        data: {
+          status: 'approved',
+          approvedAt: decidedAt,
+        },
+      });
+      expect(tx.submission.update).toHaveBeenCalledWith({
+        where: { id: 1n },
+        data: {
+          status: 'approved',
+          approvedAt: decidedAt,
+          currentAppliedApprovalPolicyId: null,
+        },
+      });
+      expect(result).toMatchObject({
+        status: 'approved',
+      });
+    });
+
+    it('moves to the next applied approval policy when it exists', async () => {
+      const submission = createSubmittedSubmissionForApproval();
+      tx.submission.findUnique.mockResolvedValue(submission);
+      tx.approver.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.findUniqueOrThrow.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        approvedCount: 1,
+      });
+      tx.appliedApprovalRequirement.update.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        status: 'approved',
+        approvedCount: 1,
+      });
+      tx.appliedApprovalPolicy.findFirst.mockResolvedValue({
+        id: 101n,
+      });
+      tx.submission.update.mockResolvedValue({
+        ...submission,
+        currentAppliedApprovalPolicyId: 101n,
+      });
+
+      await service.approve(1n, 3n);
+
+      expect(tx.submission.update).toHaveBeenCalledWith({
+        where: { id: 1n },
+        data: {
+          currentAppliedApprovalPolicyId: 101n,
+        },
+      });
+    });
+
+    it('uses incremented approved count to approve requirement', async () => {
+      const submission = createSubmittedSubmissionForApproval();
+      submission.currentAppliedApprovalPolicy.requirements[0].requiredCount = 2;
+      submission.currentAppliedApprovalPolicy.requirements[0].approvedCount = 0;
+      tx.submission.findUnique.mockResolvedValue(submission);
+      tx.approver.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.findUniqueOrThrow.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        approvedCount: 2,
+      });
+      tx.appliedApprovalRequirement.update.mockResolvedValue({
+        ...submission.currentAppliedApprovalPolicy.requirements[0],
+        status: 'approved',
+        approvedCount: 2,
+        approvedAt: decidedAt,
+      });
+      tx.appliedApprovalPolicy.findFirst.mockResolvedValue(null);
+      tx.submission.update.mockResolvedValue({
+        ...submission,
+        status: 'approved',
+        approvedAt: decidedAt,
+        currentAppliedApprovalPolicyId: null,
+      });
+
+      await service.approve(1n, 3n);
+
+      expect(tx.appliedApprovalRequirement.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 300n,
+          status: 'pending',
+          approvedCount: {
+            lt: 2,
+          },
+        },
+        data: {
+          approvedCount: {
+            increment: 1,
+          },
+        },
+      });
+      expect(tx.appliedApprovalRequirement.update).toHaveBeenCalledWith({
+        where: { id: 300n },
+        data: {
+          status: 'approved',
+          approvedAt: decidedAt,
+        },
+      });
+      expect(tx.appliedApprovalPolicy.update).toHaveBeenCalledWith({
+        where: { id: 100n },
+        data: {
+          status: 'approved',
+          approvedAt: decidedAt,
+        },
+      });
+    });
+
+    it('throws ForbiddenException when user is not current approver', async () => {
+      tx.submission.findUnique.mockResolvedValue(
+        createSubmittedSubmissionForApproval(),
+      );
+
+      await expect(service.approve(1n, 999n)).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(tx.approver.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when approval is already decided', async () => {
+      tx.submission.findUnique.mockResolvedValue(
+        createSubmittedSubmissionForApproval(),
+      );
+      tx.approver.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.approve(1n, 3n)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(tx.approvalDecision.create).not.toHaveBeenCalled();
+      expect(tx.appliedApprovalRequirement.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when approval requirement is already satisfied', async () => {
+      tx.submission.findUnique.mockResolvedValue(
+        createSubmittedSubmissionForApproval(),
+      );
+      tx.approver.updateMany.mockResolvedValue({ count: 1 });
+      tx.appliedApprovalRequirement.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.approve(1n, 3n)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(tx.approvalDecision.create).not.toHaveBeenCalled();
+      expect(
+        tx.appliedApprovalRequirement.findUniqueOrThrow,
+      ).not.toHaveBeenCalled();
+      expect(tx.appliedApprovalRequirement.update).not.toHaveBeenCalled();
+      expect(tx.appliedApprovalPolicy.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when submission status is not submitted', async () => {
+      tx.submission.findUnique.mockResolvedValue({
+        ...createSubmittedSubmissionForApproval(),
+        status: 'approved',
+      });
+
+      await expect(service.approve(1n, 3n)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(tx.approver.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reject', () => {
+    const decidedAt = new Date('2026-01-02T00:00:00.000Z');
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(decidedAt);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('rejects current approver step and rejects submission', async () => {
+      const submission = createSubmittedSubmissionForApproval();
+      tx.submission.findUnique.mockResolvedValue(submission);
+      tx.approver.updateMany.mockResolvedValue({ count: 1 });
+      tx.submission.update.mockResolvedValue({
+        ...submission,
+        status: 'rejected',
+        rejectedAt: decidedAt,
+        currentAppliedApprovalPolicyId: null,
+      });
+
+      const result = await service.reject(1n, 3n);
+
+      expect(tx.approver.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 500n,
+          status: 'pending',
+          appliedApprovalRequirement: {
+            status: 'pending',
+            appliedApprovalPolicy: {
+              id: 100n,
+              status: 'pending',
+              submission: {
+                id: 1n,
+                status: 'submitted',
+                currentAppliedApprovalPolicyId: 100n,
+              },
+            },
+          },
+        },
+        data: {
+          status: 'rejected',
+          decidedAt,
+        },
+      });
+      expect(tx.approvalDecision.create).toHaveBeenCalledWith({
+        data: {
+          approverId: 500n,
+          actorId: 3n,
+          decision: 'rejected',
+          decidedAt,
+        },
+      });
+      expect(tx.appliedApprovalRequirement.update).toHaveBeenCalledWith({
+        where: { id: 300n },
+        data: {
+          status: 'rejected',
+          rejectedAt: decidedAt,
+        },
+      });
+      expect(tx.appliedApprovalPolicy.update).toHaveBeenCalledWith({
+        where: { id: 100n },
+        data: {
+          status: 'rejected',
+          rejectedAt: decidedAt,
+        },
+      });
+      expect(result.status).toBe('rejected');
+    });
+
+    it('throws ForbiddenException when user is not current approver', async () => {
+      tx.submission.findUnique.mockResolvedValue(
+        createSubmittedSubmissionForApproval(),
+      );
+
+      await expect(service.reject(1n, 999n)).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(tx.approver.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when rejection is already decided', async () => {
+      tx.submission.findUnique.mockResolvedValue(
+        createSubmittedSubmissionForApproval(),
+      );
+      tx.approver.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.reject(1n, 3n)).rejects.toThrow(BadRequestException);
+
+      expect(tx.approvalDecision.create).not.toHaveBeenCalled();
+      expect(tx.appliedApprovalRequirement.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when submission status is not submitted', async () => {
+      tx.submission.findUnique.mockResolvedValue({
+        ...createSubmittedSubmissionForApproval(),
+        status: 'rejected',
+      });
+
+      await expect(service.reject(1n, 3n)).rejects.toThrow(BadRequestException);
+
+      expect(tx.approver.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('withdraw', () => {
+    const withdrawnAt = new Date('2026-01-02T00:00:00.000Z');
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(withdrawnAt);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('withdraws submitted submission by applicant', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+        submittedById: 100n,
+      });
+      tx.submission.update.mockResolvedValue({
+        ...submission,
+        status: 'withdrawn',
+        withdrawnAt,
+      });
+
+      const result = await service.withdraw(111n, 100n);
+
+      expect(tx.approver.updateMany).toHaveBeenCalledWith({
+        where: {
+          status: 'pending',
+          appliedApprovalRequirement: {
+            appliedApprovalPolicy: {
+              submissionId: 111n,
+            },
+          },
+        },
+        data: {
+          status: 'skipped',
+        },
+      });
+      expect(tx.submission.update).toHaveBeenCalledWith({
+        where: { id: 111n },
+        data: {
+          status: 'withdrawn',
+          withdrawnAt,
+          currentAppliedApprovalPolicyId: null,
+        },
+      });
+      expect(result.status).toBe('withdrawn');
+    });
+
+    it('throws ForbiddenException when user is not applicant', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+        submittedById: 100n,
+      });
+
+      await expect(service.withdraw(111n, 999n)).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(tx.submission.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when submission status is not submitted', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...submission,
+        status: 'draft',
+        submittedById: 100n,
+      });
+
+      await expect(service.withdraw(111n, 100n)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(tx.submission.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findApprovable', () => {
     it('returns submitted submissions that the user can approve', async () => {
       const submissions = [
