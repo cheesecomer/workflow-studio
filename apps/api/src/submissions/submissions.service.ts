@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -298,6 +299,14 @@ export class SubmissionsService {
       throw new NotFoundException('Submission not found');
     }
 
+    if (submission.status != 'draft') {
+      throw new BadRequestException('Invalid submission status');
+    }
+
+    if (submission.createdById !== submittedById) {
+      throw new ForbiddenException('Forbidden');
+    }
+
     const documentDefinition = await this.prisma.documentDefinition.findUnique({
       where: { id: submission.documentDefinitionId },
       include: {
@@ -317,10 +326,6 @@ export class SubmissionsService {
 
     if (!documentDefinition) {
       throw new NotFoundException('Document definition not found');
-    }
-
-    if (submission.status != 'draft') {
-      throw new BadRequestException('Invalid submission status');
     }
 
     this.submissionsSubmitValidator.validate(submission, documentDefinition);
@@ -346,6 +351,256 @@ export class SubmissionsService {
           submittedAt,
           currentAppliedApprovalPolicyId: firstAppliedApprovalPolicyId,
           applicantDepartmentId: applicantDepartmentId,
+        },
+      });
+    });
+  }
+
+  async approve(id: bigint, actorId: bigint) {
+    return this.prisma.$transaction(async (tx) => {
+      const decidedAt = new Date();
+      const submission = await this.findSubmissionForApprovalAction(tx, id);
+
+      if (submission.status !== 'submitted') {
+        throw new BadRequestException('Invalid submission status');
+      }
+
+      const currentPolicy = submission.currentAppliedApprovalPolicy;
+
+      if (!currentPolicy) {
+        throw new BadRequestException('Current approval policy not found');
+      }
+
+      const currentApprover = this.findCurrentApprover(currentPolicy, actorId);
+
+      if (!currentApprover) {
+        throw new ForbiddenException('Forbidden');
+      }
+
+      const approverUpdate = await tx.approver.updateMany({
+        where: this.buildCurrentApproverUpdateWhere({
+          id,
+          currentAppliedApprovalPolicyId: currentPolicy.id,
+          currentApproverId: currentApprover.approver.id,
+        }),
+        data: {
+          status: 'approved',
+          decidedAt,
+        },
+      });
+
+      if (approverUpdate.count !== 1) {
+        throw new BadRequestException('Approval already decided');
+      }
+
+      const requirementUpdate = await tx.appliedApprovalRequirement.updateMany({
+        where: {
+          id: currentApprover.requirement.id,
+          status: 'pending',
+          approvedCount: {
+            lt: currentApprover.requirement.requiredCount,
+          },
+        },
+        data: {
+          approvedCount: {
+            increment: 1,
+          },
+        },
+      });
+
+      if (requirementUpdate.count !== 1) {
+        throw new BadRequestException('Approval already decided');
+      }
+
+      const approvedRequirement =
+        await tx.appliedApprovalRequirement.findUniqueOrThrow({
+          where: { id: currentApprover.requirement.id },
+        });
+
+      const currentRequirement =
+        approvedRequirement.approvedCount >= approvedRequirement.requiredCount
+          ? await tx.appliedApprovalRequirement.update({
+              where: { id: approvedRequirement.id },
+              data: {
+                status: 'approved',
+                approvedAt: decidedAt,
+              },
+            })
+          : approvedRequirement;
+
+      await tx.approvalDecision.create({
+        data: {
+          approverId: currentApprover.approver.id,
+          actorId,
+          decision: 'approved',
+          decidedAt,
+        },
+      });
+
+      const requirements = currentPolicy.requirements.map((requirement) =>
+        requirement.id === currentRequirement.id
+          ? currentRequirement
+          : requirement,
+      );
+
+      if (!this.isApprovalPolicyApproved(currentPolicy, requirements)) {
+        return tx.submission.findUnique({ where: { id } });
+      }
+
+      await tx.appliedApprovalPolicy.update({
+        where: { id: currentPolicy.id },
+        data: {
+          status: 'approved',
+          approvedAt: decidedAt,
+        },
+      });
+
+      const nextAppliedPolicy = await tx.appliedApprovalPolicy.findFirst({
+        where: {
+          submissionId: id,
+          position: {
+            gt: currentPolicy.position,
+          },
+          status: 'pending',
+        },
+        orderBy: {
+          position: 'asc',
+        },
+      });
+
+      if (nextAppliedPolicy) {
+        return tx.submission.update({
+          where: { id },
+          data: {
+            currentAppliedApprovalPolicyId: nextAppliedPolicy.id,
+          },
+        });
+      }
+
+      return tx.submission.update({
+        where: { id },
+        data: {
+          status: 'approved',
+          approvedAt: decidedAt,
+          currentAppliedApprovalPolicyId: null,
+        },
+      });
+    });
+  }
+
+  async reject(id: bigint, actorId: bigint) {
+    return this.prisma.$transaction(async (tx) => {
+      const decidedAt = new Date();
+      const submission = await this.findSubmissionForApprovalAction(tx, id);
+
+      if (submission.status !== 'submitted') {
+        throw new BadRequestException('Invalid submission status');
+      }
+
+      const currentPolicy = submission.currentAppliedApprovalPolicy;
+
+      if (!currentPolicy) {
+        throw new BadRequestException('Current approval policy not found');
+      }
+
+      const currentApprover = this.findCurrentApprover(currentPolicy, actorId);
+
+      if (!currentApprover) {
+        throw new ForbiddenException('Forbidden');
+      }
+
+      const approverUpdate = await tx.approver.updateMany({
+        where: this.buildCurrentApproverUpdateWhere({
+          id,
+          currentAppliedApprovalPolicyId: currentPolicy.id,
+          currentApproverId: currentApprover.approver.id,
+        }),
+        data: {
+          status: 'rejected',
+          decidedAt,
+        },
+      });
+
+      if (approverUpdate.count !== 1) {
+        throw new BadRequestException('Approval already decided');
+      }
+
+      await tx.approvalDecision.create({
+        data: {
+          approverId: currentApprover.approver.id,
+          actorId,
+          decision: 'rejected',
+          decidedAt,
+        },
+      });
+
+      await tx.appliedApprovalRequirement.update({
+        where: { id: currentApprover.requirement.id },
+        data: {
+          status: 'rejected',
+          rejectedAt: decidedAt,
+        },
+      });
+
+      await tx.appliedApprovalPolicy.update({
+        where: { id: currentPolicy.id },
+        data: {
+          status: 'rejected',
+          rejectedAt: decidedAt,
+        },
+      });
+
+      return tx.submission.update({
+        where: { id },
+        data: {
+          status: 'rejected',
+          rejectedAt: decidedAt,
+          currentAppliedApprovalPolicyId: null,
+        },
+      });
+    });
+  }
+
+  async withdraw(id: bigint, actorId: bigint) {
+    const submission = await this.prisma.submission.findUnique({
+      where: { id },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    if (submission.status !== 'submitted') {
+      throw new BadRequestException('Invalid submission status');
+    }
+
+    if (submission.submittedById !== actorId) {
+      throw new ForbiddenException('Forbidden');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const withdrawnAt = new Date();
+
+      await tx.approver.updateMany({
+        where: {
+          status: 'pending',
+          appliedApprovalRequirement: {
+            appliedApprovalPolicy: {
+              submissionId: id,
+            },
+          },
+        },
+        data: {
+          status: 'skipped',
+        },
+      });
+
+      return tx.submission.update({
+        where: { id },
+        data: {
+          status: 'withdrawn',
+          withdrawnAt,
+          currentAppliedApprovalPolicyId: null,
         },
       });
     });
@@ -409,5 +664,101 @@ export class SubmissionsService {
     }
 
     return membership.departmentId;
+  }
+
+  private async findSubmissionForApprovalAction(
+    tx: Prisma.TransactionClient,
+    id: bigint,
+  ) {
+    const submission = await tx.submission.findUnique({
+      where: { id },
+      include: {
+        currentAppliedApprovalPolicy: {
+          include: {
+            approvalPolicy: true,
+            requirements: {
+              include: {
+                approvers: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    return submission;
+  }
+
+  private findCurrentApprover(
+    currentPolicy: NonNullable<
+      Awaited<
+        ReturnType<SubmissionsService['findSubmissionForApprovalAction']>
+      >['currentAppliedApprovalPolicy']
+    >,
+    actorId: bigint,
+  ) {
+    for (const requirement of currentPolicy.requirements) {
+      if (requirement.status !== 'pending') {
+        continue;
+      }
+
+      const approver = requirement.approvers.find(
+        (approver) =>
+          approver.userId === actorId && approver.status === 'pending',
+      );
+
+      if (approver) {
+        return { requirement, approver };
+      }
+    }
+
+    return null;
+  }
+
+  private isApprovalPolicyApproved(
+    currentPolicy: NonNullable<
+      Awaited<
+        ReturnType<SubmissionsService['findSubmissionForApprovalAction']>
+      >['currentAppliedApprovalPolicy']
+    >,
+    requirements: Array<{ status: string }>,
+  ) {
+    if (currentPolicy.approvalPolicy.operator === 'any') {
+      return requirements.some(
+        (requirement) => requirement.status === 'approved',
+      );
+    }
+
+    return requirements.every(
+      (requirement) => requirement.status === 'approved',
+    );
+  }
+
+  private buildCurrentApproverUpdateWhere(params: {
+    id: bigint;
+    currentAppliedApprovalPolicyId: bigint;
+    currentApproverId: bigint;
+  }): Prisma.ApproverWhereInput {
+    return {
+      id: params.currentApproverId,
+      status: 'pending',
+      appliedApprovalRequirement: {
+        status: 'pending',
+        appliedApprovalPolicy: {
+          id: params.currentAppliedApprovalPolicyId,
+          status: 'pending',
+          submission: {
+            id: params.id,
+            status: 'submitted',
+            currentAppliedApprovalPolicyId:
+              params.currentAppliedApprovalPolicyId,
+          },
+        },
+      },
+    };
   }
 }

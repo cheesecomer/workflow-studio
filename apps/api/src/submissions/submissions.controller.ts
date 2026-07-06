@@ -60,4 +60,19 @@ export class SubmissionsController {
   submit(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
     return this.submissionsService.submit(id, user.id);
   }
+
+  @Post(':id/approve')
+  approve(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
+    return this.submissionsService.approve(id, user.id);
+  }
+
+  @Post(':id/reject')
+  reject(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
+    return this.submissionsService.reject(id, user.id);
+  }
+
+  @Post(':id/withdraw')
+  withdraw(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
+    return this.submissionsService.withdraw(id, user.id);
+  }
 }
