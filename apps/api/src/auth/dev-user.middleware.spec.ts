@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { DevUserMiddleware } from './dev-user.middleware';
 
 describe('DevUserMiddleware', () => {
