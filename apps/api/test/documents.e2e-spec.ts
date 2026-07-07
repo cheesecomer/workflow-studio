@@ -81,6 +81,44 @@ describe('DocumentsController (e2e)', () => {
       publishedContent: Record<string, unknown>;
       currentDocumentDefinitionId: string;
     };
+    type DocumentDetailResponse = {
+      id: string;
+      currentDocumentDefinition: {
+        id: string;
+        version: number;
+        name: string;
+        fieldGroupDefinitions: {
+          id: string;
+          key: string;
+          label: string;
+          position: number;
+          fieldDefinitions: {
+            id: string;
+            key: string;
+            label: string;
+            fieldType: string;
+            required: boolean;
+            position: number;
+            settings: Record<string, unknown>;
+          }[];
+        }[];
+        approvalPolicies: {
+          id: string;
+          name: string;
+          operator: string;
+          position: number;
+          requirements: {
+            id: string;
+            name: string;
+            departmentScope: string;
+            positionOperator: string;
+            positionId: string;
+            upperPositionId: string | null;
+            requiredCount: number;
+          }[];
+        }[];
+      } | null;
+    };
 
     const createResponse = await request(app.getHttpServer())
       .post('/documents')
@@ -187,6 +225,50 @@ describe('DocumentsController (e2e)', () => {
               },
             ],
           },
+        });
+      });
+
+    await request(app.getHttpServer())
+      .get(`/documents/${documentId}`)
+      .expect(200)
+      .expect(({ body }: { body: DocumentDetailResponse }) => {
+        expect(body.currentDocumentDefinition).toMatchObject({
+          version: 1,
+          name: 'Updated Expense Request',
+          fieldGroupDefinitions: [
+            {
+              key: 'price',
+              label: '申請額',
+              position: 1,
+              fieldDefinitions: [
+                {
+                  key: 'price',
+                  label: '申請額',
+                  fieldType: 'number',
+                  required: true,
+                  position: 1,
+                  settings: {},
+                },
+              ],
+            },
+          ],
+          approvalPolicies: [
+            {
+              name: 'Example Policy',
+              operator: 'all',
+              position: 1,
+              requirements: [
+                {
+                  name: 'Require 3 users',
+                  departmentScope: 'same_tree',
+                  positionOperator: 'eq',
+                  positionId: position.id.toString(),
+                  upperPositionId: null,
+                  requiredCount: 3,
+                },
+              ],
+            },
+          ],
         });
       });
 
