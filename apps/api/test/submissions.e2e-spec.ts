@@ -140,6 +140,17 @@ describe('SubmissionsController (e2e)', () => {
 
     type SubmissionResponse = {
       id: string;
+      documentDefinition: {
+        id: string;
+        documentId: string;
+        name: string;
+        version: number;
+      };
+      applicantDepartment: {
+        id: string;
+        name: string;
+      } | null;
+      currentAppliedApprovalPolicy: Record<string, unknown> | null;
     };
 
     const submissionId = (createResponse.body as SubmissionResponse).id;
@@ -153,6 +164,14 @@ describe('SubmissionsController (e2e)', () => {
           id: submissionId,
           documentDefinitionId: documentDefinition.id.toString(),
           status: 'draft',
+          documentDefinition: {
+            id: documentDefinition.id.toString(),
+            documentId: document.id.toString(),
+            name: '経費申請',
+            version: 1,
+          },
+          applicantDepartment: null,
+          currentAppliedApprovalPolicy: null,
         });
       });
 
