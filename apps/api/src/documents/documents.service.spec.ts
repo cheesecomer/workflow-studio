@@ -88,6 +88,36 @@ describe('DocumentsService', () => {
         where: {
           id: documentId,
         },
+        include: {
+          currentDocumentDefinition: {
+            include: {
+              fieldGroupDefinitions: {
+                include: {
+                  fieldDefinitions: {
+                    orderBy: {
+                      position: 'asc',
+                    },
+                  },
+                },
+                orderBy: {
+                  position: 'asc',
+                },
+              },
+              approvalPolicies: {
+                include: {
+                  requirements: {
+                    orderBy: {
+                      id: 'asc',
+                    },
+                  },
+                },
+                orderBy: {
+                  position: 'asc',
+                },
+              },
+            },
+          },
+        },
       });
     });
 

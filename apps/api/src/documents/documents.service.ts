@@ -18,6 +18,36 @@ export class DocumentsService {
   async findOne(id: bigint) {
     const document = await this.prisma.document.findFirst({
       where: { id },
+      include: {
+        currentDocumentDefinition: {
+          include: {
+            fieldGroupDefinitions: {
+              include: {
+                fieldDefinitions: {
+                  orderBy: {
+                    position: 'asc',
+                  },
+                },
+              },
+              orderBy: {
+                position: 'asc',
+              },
+            },
+            approvalPolicies: {
+              include: {
+                requirements: {
+                  orderBy: {
+                    id: 'asc',
+                  },
+                },
+              },
+              orderBy: {
+                position: 'asc',
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!document) {
