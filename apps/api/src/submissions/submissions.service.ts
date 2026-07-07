@@ -771,8 +771,40 @@ export class SubmissionsService {
         },
       },
       include: {
-        documentDefinition: true,
-        createdBy: true,
+        documentDefinition: {
+          select: {
+            id: true,
+            documentId: true,
+            name: true,
+            version: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        applicantDepartment: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        currentAppliedApprovalPolicy: {
+          select: {
+            id: true,
+            approvalPolicy: {
+              select: {
+                id: true,
+                name: true,
+                operator: true,
+                position: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         submittedAt: 'asc',

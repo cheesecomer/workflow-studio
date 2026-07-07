@@ -1421,11 +1421,27 @@ describe('SubmissionsService', () => {
           status: 'submitted',
           documentDefinition: {
             id: 10n,
+            documentId: 20n,
             name: '経費申請',
+            version: 1,
           },
           createdBy: {
             id: 2n,
             name: '申請者',
+            email: 'applicant@example.com',
+          },
+          applicantDepartment: {
+            id: 30n,
+            name: 'Engineering',
+          },
+          currentAppliedApprovalPolicy: {
+            id: 40n,
+            approvalPolicy: {
+              id: 50n,
+              name: 'Manager approval',
+              operator: 'all',
+              position: 1,
+            },
           },
         },
       ];
@@ -1453,8 +1469,40 @@ describe('SubmissionsService', () => {
           },
         },
         include: {
-          documentDefinition: true,
-          createdBy: true,
+          documentDefinition: {
+            select: {
+              id: true,
+              documentId: true,
+              name: true,
+              version: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          applicantDepartment: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          currentAppliedApprovalPolicy: {
+            select: {
+              id: true,
+              approvalPolicy: {
+                select: {
+                  id: true,
+                  name: true,
+                  operator: true,
+                  position: true,
+                },
+              },
+            },
+          },
         },
         orderBy: {
           submittedAt: 'asc',
