@@ -846,24 +846,58 @@ describe('SubmissionsController (e2e)', () => {
             status: string;
             documentDefinition: {
               id: string;
+              documentId: string;
               name: string;
+              version: number;
             };
             createdBy: {
               id: string;
               name: string;
+              email: string;
+            };
+            applicantDepartment: {
+              id: string;
+              name: string;
+            };
+            submittedAt: string;
+            currentAppliedApprovalPolicy: {
+              id: string;
+              approvalPolicy: {
+                id: string;
+                name: string;
+                operator: string;
+                position: number;
+              };
             };
           }[]
         )[0],
       ).toMatchObject({
         id: approvableSubmission.id.toString(),
         status: 'submitted',
+        submittedAt: '2026-01-01T00:00:00.000Z',
         documentDefinition: {
           id: documentDefinition.id.toString(),
+          documentId: document.id.toString(),
           name: '経費申請',
+          version: 1,
         },
         createdBy: {
           id: applicant.id.toString(),
           name: 'applicant',
+          email: 'applicant@example.com',
+        },
+        applicantDepartment: {
+          id: department.id.toString(),
+          name: 'Engineering',
+        },
+        currentAppliedApprovalPolicy: {
+          id: approvableAppliedPolicy.id.toString(),
+          approvalPolicy: {
+            id: approvalPolicy.id.toString(),
+            name: 'Manager approval',
+            operator: 'all',
+            position: 1,
+          },
         },
       });
     });
