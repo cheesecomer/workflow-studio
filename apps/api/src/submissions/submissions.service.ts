@@ -137,6 +137,34 @@ export class SubmissionsService {
 
     return this.prisma.submission.findMany({
       where,
+      include: {
+        documentDefinition: {
+          select: {
+            id: true,
+            documentId: true,
+            name: true,
+            version: true,
+          },
+        },
+        applicantDepartment: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        currentAppliedApprovalPolicy: {
+          include: {
+            approvalPolicy: {
+              select: {
+                id: true,
+                name: true,
+                operator: true,
+                position: true,
+              },
+            },
+          },
+        },
+      },
       orderBy: { updatedAt: 'desc' },
     });
   }

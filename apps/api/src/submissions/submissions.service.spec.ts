@@ -196,6 +196,35 @@ describe('SubmissionsService', () => {
   });
 
   describe('findAll', () => {
+    const submissionListInclude = {
+      documentDefinition: {
+        select: {
+          id: true,
+          documentId: true,
+          name: true,
+          version: true,
+        },
+      },
+      applicantDepartment: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      currentAppliedApprovalPolicy: {
+        include: {
+          approvalPolicy: {
+            select: {
+              id: true,
+              name: true,
+              operator: true,
+              position: true,
+            },
+          },
+        },
+      },
+    };
+
     it('returns submissions', async () => {
       prisma.submission.findMany.mockResolvedValue([submission]);
 
@@ -205,6 +234,7 @@ describe('SubmissionsService', () => {
         where: {
           createdById: userId,
         },
+        include: submissionListInclude,
         orderBy: {
           updatedAt: 'desc',
         },
@@ -223,6 +253,7 @@ describe('SubmissionsService', () => {
           createdById: userId,
           status: 'draft',
         },
+        include: submissionListInclude,
         orderBy: {
           updatedAt: 'desc',
         },
