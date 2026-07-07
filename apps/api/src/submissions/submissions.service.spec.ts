@@ -210,6 +210,32 @@ describe('SubmissionsService', () => {
         },
       });
     });
+
+    it('filters submissions by status', async () => {
+      prisma.submission.findMany.mockResolvedValue([submission]);
+
+      await expect(service.findAll(userId, 'draft')).resolves.toEqual([
+        submission,
+      ]);
+
+      expect(prisma.submission.findMany).toHaveBeenCalledWith({
+        where: {
+          createdById: userId,
+          status: 'draft',
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+      });
+    });
+
+    it('throws BadRequestException when status is invalid', async () => {
+      await expect(service.findAll(userId, 'unknown')).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(prisma.submission.findMany).not.toHaveBeenCalled();
+    });
   });
 
   describe('findOne', () => {
@@ -408,18 +434,22 @@ describe('SubmissionsService', () => {
       tx.submission.update.mockResolvedValue(updated);
 
       await expect(
-        service.update(111n, {
-          fieldGroupRows: [
-            {
-              fieldGroupDefinitionId: 1n,
-              position: 1,
-              fieldValues: [
-                { fieldDefinitionId: 1n, value: 3000 },
-                { fieldDefinitionId: 2n, value: '交通費' },
-              ],
-            },
-          ],
-        }),
+        service.update(
+          111n,
+          {
+            fieldGroupRows: [
+              {
+                fieldGroupDefinitionId: 1n,
+                position: 1,
+                fieldValues: [
+                  { fieldDefinitionId: 1n, value: 3000 },
+                  { fieldDefinitionId: 2n, value: '交通費' },
+                ],
+              },
+            ],
+          },
+          userId,
+        ),
       ).resolves.toEqual(updated);
 
       expect(prisma.submission.findUnique).toHaveBeenCalledWith({
@@ -462,22 +492,67 @@ describe('SubmissionsService', () => {
       prisma.submission.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.update(999n, {
-          fieldGroupRows: [
-            {
-              fieldGroupDefinitionId: 1n,
-              position: 1,
-              fieldValues: [
-                { fieldDefinitionId: 1n, value: 3000 },
-                { fieldDefinitionId: 2n, value: '交通費' },
-              ],
-            },
-          ],
-        }),
+        service.update(
+          999n,
+          {
+            fieldGroupRows: [
+              {
+                fieldGroupDefinitionId: 1n,
+                position: 1,
+                fieldValues: [
+                  { fieldDefinitionId: 1n, value: 3000 },
+                  { fieldDefinitionId: 2n, value: '交通費' },
+                ],
+              },
+            ],
+          },
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(tx.submission.update).not.toHaveBeenCalled();
     });
+
+    it('throws BadRequestException when submission is not draft', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+      });
+
+      await expect(
+        service.update(
+          111n,
+          {
+            fieldGroupRows: [],
+          },
+          userId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.fieldGroupDefinition.findMany).not.toHaveBeenCalled();
+      expect(tx.submission.update).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when current user does not own draft', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...submission,
+        createdById: 999n,
+      });
+
+      await expect(
+        service.update(
+          111n,
+          {
+            fieldGroupRows: [],
+          },
+          userId,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(prisma.fieldGroupDefinition.findMany).not.toHaveBeenCalled();
+      expect(tx.submission.update).not.toHaveBeenCalled();
+    });
+
     it('throws BadRequestException when field definition does not belong to field group', async () => {
       prisma.fieldGroupDefinition.findMany.mockResolvedValue([
         {
@@ -511,7 +586,7 @@ describe('SubmissionsService', () => {
       prisma.submission.findUnique.mockResolvedValue(submission);
       tx.submission.delete.mockResolvedValue(submission);
 
-      await expect(service.remove(1n)).resolves.toEqual(submission);
+      await expect(service.remove(1n, userId)).resolves.toEqual(submission);
 
       expect(prisma.submission.findUnique).toHaveBeenCalledWith({
         where: {
@@ -539,7 +614,39 @@ describe('SubmissionsService', () => {
     it('throws NotFoundException when submission does not exist', async () => {
       prisma.submission.findUnique.mockResolvedValue(null);
 
-      await expect(service.remove(999n)).rejects.toThrow(NotFoundException);
+      await expect(service.remove(999n, userId)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(tx.submissionFieldGroupRow.deleteMany).not.toHaveBeenCalled();
+      expect(tx.submissionFieldValue.deleteMany).not.toHaveBeenCalled();
+      expect(tx.submission.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when submission is not draft', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+      });
+
+      await expect(service.remove(1n, userId)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(tx.submissionFieldGroupRow.deleteMany).not.toHaveBeenCalled();
+      expect(tx.submissionFieldValue.deleteMany).not.toHaveBeenCalled();
+      expect(tx.submission.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when current user does not own draft', async () => {
+      prisma.submission.findUnique.mockResolvedValue({
+        ...submission,
+        createdById: 999n,
+      });
+
+      await expect(service.remove(1n, userId)).rejects.toThrow(
+        ForbiddenException,
+      );
 
       expect(tx.submissionFieldGroupRow.deleteMany).not.toHaveBeenCalled();
       expect(tx.submissionFieldValue.deleteMany).not.toHaveBeenCalled();

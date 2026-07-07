@@ -49,7 +49,19 @@ describe('SubmissionsController', () => {
     it('delegates to service with current user id', async () => {
       await controller.findAll(currentUser);
 
-      expect(submissionService.findAll).toHaveBeenCalledWith(currentUser.id);
+      expect(submissionService.findAll).toHaveBeenCalledWith(
+        currentUser.id,
+        undefined,
+      );
+    });
+
+    it('delegates to service with current user id and status', async () => {
+      await controller.findAll(currentUser, 'draft');
+
+      expect(submissionService.findAll).toHaveBeenCalledWith(
+        currentUser.id,
+        'draft',
+      );
     });
   });
 
@@ -88,7 +100,11 @@ describe('SubmissionsController', () => {
 
       await controller.update(currentUser, 1n, dto);
 
-      expect(submissionService.update).toHaveBeenCalledWith(1n, dto);
+      expect(submissionService.update).toHaveBeenCalledWith(
+        1n,
+        dto,
+        currentUser.id,
+      );
     });
   });
 
@@ -96,7 +112,7 @@ describe('SubmissionsController', () => {
     it('delegates to service with current user id and submission id', async () => {
       await controller.remove(currentUser, 1n);
 
-      expect(submissionService.remove).toHaveBeenCalledWith(1n);
+      expect(submissionService.remove).toHaveBeenCalledWith(1n, currentUser.id);
     });
   });
 

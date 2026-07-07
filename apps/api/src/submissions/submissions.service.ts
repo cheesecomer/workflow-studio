@@ -11,7 +11,25 @@ import { RejectSubmissionDto } from './dto/reject-submission.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionsSubmitValidator } from './submissions-submit.validator';
 import { SubmissionsApprovalRouteMaterializer } from './submissions-approval-route.materializer';
-import { Prisma } from '@workflow-studio/db';
+import { Prisma, SubmissionStatus } from '@workflow-studio/db';
+
+const SUBMISSION_STATUSES = Object.values(SubmissionStatus);
+
+function isSubmissionStatus(status: string): status is SubmissionStatus {
+  return SUBMISSION_STATUSES.includes(status as SubmissionStatus);
+}
+
+function parseSubmissionStatus(status?: string) {
+  if (!status) {
+    return undefined;
+  }
+
+  if (!isSubmissionStatus(status)) {
+    throw new BadRequestException('Invalid submission status');
+  }
+
+  return status;
+}
 
 @Injectable()
 export class SubmissionsService {
@@ -107,9 +125,18 @@ export class SubmissionsService {
     });
   }
 
-  async findAll(createdById: bigint) {
+  async findAll(createdById: bigint, status?: string) {
+    const submissionStatus = parseSubmissionStatus(status);
+    const where: Prisma.SubmissionWhereInput = {
+      createdById,
+    };
+
+    if (submissionStatus) {
+      where.status = submissionStatus;
+    }
+
     return this.prisma.submission.findMany({
-      where: { createdById },
+      where,
       orderBy: { updatedAt: 'desc' },
     });
   }
@@ -199,7 +226,11 @@ export class SubmissionsService {
     return submission;
   }
 
-  async update(id: bigint, updateSubmissionDto: UpdateSubmissionDto) {
+  async update(
+    id: bigint,
+    updateSubmissionDto: UpdateSubmissionDto,
+    currentUserId: bigint,
+  ) {
     const { fieldGroupRows, ...submissionData } = updateSubmissionDto;
     const submission = await this.prisma.submission.findUnique({
       where: { id },
@@ -207,6 +238,14 @@ export class SubmissionsService {
 
     if (!submission) {
       throw new NotFoundException('Submission not found');
+    }
+
+    if (submission.status !== 'draft') {
+      throw new BadRequestException('Invalid submission status');
+    }
+
+    if (submission.createdById !== currentUserId) {
+      throw new ForbiddenException('Forbidden');
     }
 
     const groupIds = fieldGroupRows.map((row) => row.fieldGroupDefinitionId);
@@ -301,13 +340,21 @@ export class SubmissionsService {
     });
   }
 
-  async remove(id: bigint) {
+  async remove(id: bigint, currentUserId: bigint) {
     const submission = await this.prisma.submission.findUnique({
       where: { id },
     });
 
     if (!submission) {
       throw new NotFoundException('Submission not found');
+    }
+
+    if (submission.status !== 'draft') {
+      throw new BadRequestException('Invalid submission status');
+    }
+
+    if (submission.createdById !== currentUserId) {
+      throw new ForbiddenException('Forbidden');
     }
 
     return this.prisma.$transaction(async (tx) => {
