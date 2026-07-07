@@ -240,6 +240,159 @@ describe('SubmissionsController (e2e)', () => {
       .expect(404);
   });
 
+  describe('GET /submissions', () => {
+    it('filters current user submissions by status', async () => {
+      const currentUser = await prisma.user.findUniqueOrThrow({
+        where: { email: 'admin@example.com' },
+      });
+
+      const otherUser =
+        (await prisma.user.findFirst({
+          where: { email: 'submission-list-other@example.com' },
+        })) ??
+        (await prisma.user.create({
+          data: {
+            email: 'submission-list-other@example.com',
+            name: 'submission list other',
+            passwordDigest: 'password',
+          },
+        }));
+
+      const document = await prisma.document.create({
+        data: {
+          name: '経費申請',
+          draftContent: {},
+          publishedContent: {},
+        },
+      });
+
+      const documentDefinition = await prisma.documentDefinition.create({
+        data: {
+          name: '経費申請',
+          documentId: document.id,
+          version: 1,
+          publishedById: currentUser.id,
+        },
+      });
+
+      const draftSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'draft',
+          createdById: currentUser.id,
+        },
+      });
+
+      await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'submitted',
+          createdById: currentUser.id,
+          submittedById: currentUser.id,
+          submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'draft',
+          createdById: otherUser.id,
+        },
+      });
+
+      await request(app.getHttpServer())
+        .get('/submissions?status=draft')
+        .expect(200)
+        .expect(({ body }: { body: { id: string; status: string }[] }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0]).toMatchObject({
+            id: draftSubmission.id.toString(),
+            status: 'draft',
+          });
+        });
+    });
+
+    it('rejects invalid status filter', async () => {
+      await request(app.getHttpServer())
+        .get('/submissions?status=unknown')
+        .expect(400);
+    });
+  });
+
+  describe('draft submission controls', () => {
+    it('rejects update and delete for non-draft or non-owner submissions', async () => {
+      const currentUser = await prisma.user.findUniqueOrThrow({
+        where: { email: 'admin@example.com' },
+      });
+
+      const otherUser =
+        (await prisma.user.findFirst({
+          where: { email: 'draft-control-other@example.com' },
+        })) ??
+        (await prisma.user.create({
+          data: {
+            email: 'draft-control-other@example.com',
+            name: 'draft control other',
+            passwordDigest: 'password',
+          },
+        }));
+
+      const document = await prisma.document.create({
+        data: {
+          name: '経費申請',
+          draftContent: {},
+          publishedContent: {},
+        },
+      });
+
+      const documentDefinition = await prisma.documentDefinition.create({
+        data: {
+          name: '経費申請',
+          documentId: document.id,
+          version: 1,
+          publishedById: currentUser.id,
+        },
+      });
+
+      const otherDraftSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'draft',
+          createdById: otherUser.id,
+        },
+      });
+
+      const submittedSubmission = await prisma.submission.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          status: 'submitted',
+          createdById: currentUser.id,
+          submittedById: currentUser.id,
+          submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/submissions/${otherDraftSubmission.id.toString()}`)
+        .send({ fieldGroupRows: [] })
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .patch(`/submissions/${submittedSubmission.id.toString()}`)
+        .send({ fieldGroupRows: [] })
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .delete(`/submissions/${otherDraftSubmission.id.toString()}`)
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .delete(`/submissions/${submittedSubmission.id.toString()}`)
+        .expect(400);
+    });
+  });
+
   it('submits draft submission', async () => {
     const chief =
       (await prisma.position.findFirst({

@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { SubmissionsService } from './submissions.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
@@ -28,8 +29,11 @@ export class SubmissionsController {
   }
 
   @Get()
-  findAll(@CurrentUserDecorator() user: CurrentUser) {
-    return this.submissionsService.findAll(user.id);
+  findAll(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Query('status') status?: string,
+  ) {
+    return this.submissionsService.findAll(user.id, status);
   }
 
   @Get('/approvable')
@@ -48,14 +52,12 @@ export class SubmissionsController {
     @Param('id') id: bigint,
     @Body() updateSubmissionDto: UpdateSubmissionDto,
   ) {
-    void user;
-    return this.submissionsService.update(id, updateSubmissionDto);
+    return this.submissionsService.update(id, updateSubmissionDto, user.id);
   }
 
   @Delete(':id')
   remove(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
-    void user;
-    return this.submissionsService.remove(id);
+    return this.submissionsService.remove(id, user.id);
   }
 
   @Post(':id/submit')
