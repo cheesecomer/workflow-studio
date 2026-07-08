@@ -300,6 +300,41 @@ describe('SubmissionsService', () => {
           ],
         },
         include: {
+          documentDefinition: {
+            select: {
+              id: true,
+              documentId: true,
+              name: true,
+              version: true,
+              fieldGroupDefinitions: {
+                select: {
+                  id: true,
+                  key: true,
+                  label: true,
+                  position: true,
+                  repeatable: true,
+                  minRows: true,
+                  fieldDefinitions: {
+                    select: {
+                      id: true,
+                      key: true,
+                      label: true,
+                      fieldType: true,
+                      required: true,
+                      position: true,
+                      settings: true,
+                    },
+                    orderBy: {
+                      position: 'asc',
+                    },
+                  },
+                },
+                orderBy: {
+                  position: 'asc',
+                },
+              },
+            },
+          },
           fieldGroupRows: {
             include: {
               fieldValues: true,
@@ -385,6 +420,41 @@ describe('SubmissionsService', () => {
           ],
         },
         include: {
+          documentDefinition: {
+            select: {
+              id: true,
+              documentId: true,
+              name: true,
+              version: true,
+              fieldGroupDefinitions: {
+                select: {
+                  id: true,
+                  key: true,
+                  label: true,
+                  position: true,
+                  repeatable: true,
+                  minRows: true,
+                  fieldDefinitions: {
+                    select: {
+                      id: true,
+                      key: true,
+                      label: true,
+                      fieldType: true,
+                      required: true,
+                      position: true,
+                      settings: true,
+                    },
+                    orderBy: {
+                      position: 'asc',
+                    },
+                  },
+                },
+                orderBy: {
+                  position: 'asc',
+                },
+              },
+            },
+          },
           fieldGroupRows: {
             include: {
               fieldValues: true,
