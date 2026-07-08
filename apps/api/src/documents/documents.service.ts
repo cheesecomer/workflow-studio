@@ -15,6 +15,21 @@ export class DocumentsService {
     });
   }
 
+  findSubmittable() {
+    return this.prisma.documentDefinition.findMany({
+      where: {
+        currentForDocuments: { some: {} },
+      },
+      select: {
+        id: true,
+        documentId: true,
+        name: true,
+        version: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async findOne(id: bigint) {
     const document = await this.prisma.document.findFirst({
       where: { id },
