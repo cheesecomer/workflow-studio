@@ -11,6 +11,31 @@ describe('SubmissionsController (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
 
+  type SubmissionResponse = {
+    id: string;
+    documentDefinition: {
+      id: string;
+      documentId: string;
+      name: string;
+      version: number;
+    };
+    applicantDepartment: {
+      id: string;
+      name: string;
+    } | null;
+    currentAppliedApprovalPolicy: Record<string, unknown> | null;
+  };
+
+  type PaginatedSubmissionsResponse = {
+    items: SubmissionResponse[];
+    meta: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -138,29 +163,20 @@ describe('SubmissionsController (e2e)', () => {
       ],
     });
 
-    type SubmissionResponse = {
-      id: string;
-      documentDefinition: {
-        id: string;
-        documentId: string;
-        name: string;
-        version: number;
-      };
-      applicantDepartment: {
-        id: string;
-        name: string;
-      } | null;
-      currentAppliedApprovalPolicy: Record<string, unknown> | null;
-    };
-
     const submissionId = (createResponse.body as SubmissionResponse).id;
 
     await request(app.getHttpServer())
       .get('/submissions')
       .expect(200)
-      .expect(({ body }: { body: SubmissionResponse[] }) => {
-        expect(body).toHaveLength(1);
-        expect(body[0]).toMatchObject({
+      .expect(({ body }: { body: PaginatedSubmissionsResponse }) => {
+        expect(body.meta).toEqual({
+          page: 1,
+          limit: 20,
+          total: 1,
+          totalPages: 1,
+        });
+        expect(body.items).toHaveLength(1);
+        expect(body.items[0]).toMatchObject({
           id: submissionId,
           documentDefinitionId: documentDefinition.id.toString(),
           status: 'draft',
@@ -321,11 +337,17 @@ describe('SubmissionsController (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .get('/submissions?status=draft')
+        .get('/submissions?status=draft&page=1&limit=1')
         .expect(200)
-        .expect(({ body }: { body: { id: string; status: string }[] }) => {
-          expect(body).toHaveLength(1);
-          expect(body[0]).toMatchObject({
+        .expect(({ body }: { body: PaginatedSubmissionsResponse }) => {
+          expect(body.meta).toEqual({
+            page: 1,
+            limit: 1,
+            total: 1,
+            totalPages: 1,
+          });
+          expect(body.items).toHaveLength(1);
+          expect(body.items[0]).toMatchObject({
             id: draftSubmission.id.toString(),
             status: 'draft',
           });

@@ -32,8 +32,10 @@ export class SubmissionsController {
   findAll(
     @CurrentUserDecorator() user: CurrentUser,
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.submissionsService.findAll(user.id, status);
+    return this.submissionsService.findAll(user.id, status, { page, limit });
   }
 
   @Get('/approvable')

@@ -55,13 +55,15 @@ describe('SubmissionsService', () => {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      count: jest.fn(),
       delete: jest.fn(),
     },
     fieldGroupDefinition: {
       findMany: jest.fn(),
     },
-    $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
-      callback(tx),
+    $transaction: jest.fn(
+      (input: ((transaction: typeof tx) => unknown) | Promise<unknown>[]) =>
+        Array.isArray(input) ? Promise.all(input) : input(tx),
     ),
     documentDefinition: {
       findUnique: jest.fn(),
@@ -94,7 +96,8 @@ describe('SubmissionsService', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     prisma.$transaction.mockImplementation(
-      (callback: (transaction: typeof tx) => unknown) => callback(tx),
+      (input: ((transaction: typeof tx) => unknown) | Promise<unknown>[]) =>
+        Array.isArray(input) ? Promise.all(input) : input(tx),
     );
 
     const module: TestingModule = await Test.createTestingModule({
@@ -225,10 +228,19 @@ describe('SubmissionsService', () => {
       },
     };
 
-    it('returns submissions', async () => {
+    it('returns paginated submissions', async () => {
       prisma.submission.findMany.mockResolvedValue([submission]);
+      prisma.submission.count.mockResolvedValue(1);
 
-      await expect(service.findAll(userId)).resolves.toEqual([submission]);
+      await expect(service.findAll(userId)).resolves.toEqual({
+        items: [submission],
+        meta: {
+          page: 1,
+          limit: 20,
+          total: 1,
+          totalPages: 1,
+        },
+      });
 
       expect(prisma.submission.findMany).toHaveBeenCalledWith({
         where: {
@@ -238,15 +250,29 @@ describe('SubmissionsService', () => {
         orderBy: {
           updatedAt: 'desc',
         },
+        skip: 0,
+        take: 20,
+      });
+      expect(prisma.submission.count).toHaveBeenCalledWith({
+        where: {
+          createdById: userId,
+        },
       });
     });
 
     it('filters submissions by status', async () => {
       prisma.submission.findMany.mockResolvedValue([submission]);
+      prisma.submission.count.mockResolvedValue(1);
 
-      await expect(service.findAll(userId, 'draft')).resolves.toEqual([
-        submission,
-      ]);
+      await expect(service.findAll(userId, 'draft')).resolves.toEqual({
+        items: [submission],
+        meta: {
+          page: 1,
+          limit: 20,
+          total: 1,
+          totalPages: 1,
+        },
+      });
 
       expect(prisma.submission.findMany).toHaveBeenCalledWith({
         where: {
@@ -257,7 +283,52 @@ describe('SubmissionsService', () => {
         orderBy: {
           updatedAt: 'desc',
         },
+        skip: 0,
+        take: 20,
       });
+      expect(prisma.submission.count).toHaveBeenCalledWith({
+        where: {
+          createdById: userId,
+          status: 'draft',
+        },
+      });
+    });
+
+    it('paginates submissions', async () => {
+      prisma.submission.findMany.mockResolvedValue([submission]);
+      prisma.submission.count.mockResolvedValue(45);
+
+      await expect(
+        service.findAll(userId, undefined, { page: '2', limit: '10' }),
+      ).resolves.toEqual({
+        items: [submission],
+        meta: {
+          page: 2,
+          limit: 10,
+          total: 45,
+          totalPages: 5,
+        },
+      });
+
+      expect(prisma.submission.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 10,
+          take: 10,
+        }),
+      );
+    });
+
+    it('throws BadRequestException when pagination query is invalid', async () => {
+      await expect(
+        service.findAll(userId, undefined, { page: '0' }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.findAll(userId, undefined, { limit: '101' }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.submission.findMany).not.toHaveBeenCalled();
+      expect(prisma.submission.count).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when status is invalid', async () => {
@@ -266,6 +337,7 @@ describe('SubmissionsService', () => {
       );
 
       expect(prisma.submission.findMany).not.toHaveBeenCalled();
+      expect(prisma.submission.count).not.toHaveBeenCalled();
     });
   });
 
