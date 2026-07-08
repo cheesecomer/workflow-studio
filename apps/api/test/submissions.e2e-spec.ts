@@ -989,6 +989,7 @@ describe('SubmissionsController (e2e)', () => {
           createdById: currentUser.id,
           submittedById: currentUser.id,
           applicantDepartmentId: department.id,
+          createdAt: new Date('2025-12-31T00:00:00.000Z'),
           submittedAt: new Date('2026-01-01T00:00:00.000Z'),
         },
       });
@@ -1058,6 +1059,26 @@ describe('SubmissionsController (e2e)', () => {
         documentDefinitionId: documentDefinition.id.toString(),
         status: 'submitted',
         availableActions: ['withdraw', 'approve', 'reject'],
+        activities: [
+          {
+            type: 'created',
+            occurredAt: '2025-12-31T00:00:00.000Z',
+            actor: {
+              id: currentUser.id.toString(),
+              name: currentUser.name,
+              email: currentUser.email,
+            },
+          },
+          {
+            type: 'submitted',
+            occurredAt: '2026-01-01T00:00:00.000Z',
+            actor: {
+              id: currentUser.id.toString(),
+              name: currentUser.name,
+              email: currentUser.email,
+            },
+          },
+        ],
         documentDefinition: {
           id: documentDefinition.id.toString(),
           documentId: document.id.toString(),

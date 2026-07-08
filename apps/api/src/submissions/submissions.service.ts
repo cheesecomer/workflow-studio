@@ -57,6 +57,69 @@ type SubmissionForAvailableActions = {
   }[];
 };
 
+type SubmissionActivityActor = {
+  id: bigint;
+  name?: string;
+  email?: string;
+};
+
+type SubmissionActivity = {
+  type:
+    | 'created'
+    | 'submitted'
+    | 'approval_decision'
+    | 'approved'
+    | 'rejected'
+    | 'withdrawn';
+  occurredAt: Date;
+  actor?: SubmissionActivityActor;
+  decision?: 'approved' | 'rejected';
+  comment?: string | null;
+  approvalPolicy?: {
+    id: bigint;
+    name: string;
+    position: number;
+  };
+  approvalRequirement?: {
+    id: bigint;
+    name: string;
+  };
+};
+
+type SubmissionForActivities = {
+  createdAt: Date;
+  createdById: bigint;
+  createdBy?: SubmissionActivityActor;
+  submittedAt?: Date | null;
+  submittedById?: bigint | null;
+  submittedBy?: SubmissionActivityActor | null;
+  approvedAt?: Date | null;
+  rejectedAt?: Date | null;
+  withdrawnAt?: Date | null;
+  appliedApprovalPolicies?: {
+    id: bigint;
+    position: number;
+    approvalPolicy: {
+      id: bigint;
+      name: string;
+    };
+    requirements: {
+      approvalRequirement: {
+        id: bigint;
+        name: string;
+      };
+      approvers: {
+        decisions?: {
+          decision: 'approved' | 'rejected';
+          comment?: string | null;
+          decidedAt: Date;
+          actor: SubmissionActivityActor;
+        }[];
+      }[];
+    }[];
+  }[];
+};
+
 @Injectable()
 export class SubmissionsService {
   constructor(
@@ -221,6 +284,20 @@ export class SubmissionsService {
         ],
       },
       include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        submittedBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
         documentDefinition: {
           select: {
             id: true,
@@ -315,7 +392,86 @@ export class SubmissionsService {
     return {
       ...submission,
       availableActions: this.buildAvailableActions(submission, currentUserId),
+      activities: this.buildActivities(submission),
     };
+  }
+
+  private buildActivities(submission: SubmissionForActivities) {
+    const activities: SubmissionActivity[] = [
+      {
+        type: 'created',
+        occurredAt: submission.createdAt,
+        actor:
+          submission.createdBy ?? this.buildActorFromId(submission.createdById),
+      },
+    ];
+
+    if (submission.submittedAt) {
+      activities.push({
+        type: 'submitted',
+        occurredAt: submission.submittedAt,
+        actor:
+          submission.submittedBy ??
+          this.buildActorFromId(submission.submittedById),
+      });
+    }
+
+    for (const policy of submission.appliedApprovalPolicies ?? []) {
+      for (const requirement of policy.requirements) {
+        for (const approver of requirement.approvers) {
+          for (const decision of approver.decisions ?? []) {
+            activities.push({
+              type: 'approval_decision',
+              occurredAt: decision.decidedAt,
+              actor: decision.actor,
+              decision: decision.decision,
+              comment: decision.comment,
+              approvalPolicy: {
+                id: policy.approvalPolicy.id,
+                name: policy.approvalPolicy.name,
+                position: policy.position,
+              },
+              approvalRequirement: {
+                id: requirement.approvalRequirement.id,
+                name: requirement.approvalRequirement.name,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    if (submission.approvedAt) {
+      activities.push({
+        type: 'approved',
+        occurredAt: submission.approvedAt,
+      });
+    }
+
+    if (submission.rejectedAt) {
+      activities.push({
+        type: 'rejected',
+        occurredAt: submission.rejectedAt,
+      });
+    }
+
+    if (submission.withdrawnAt) {
+      activities.push({
+        type: 'withdrawn',
+        occurredAt: submission.withdrawnAt,
+        actor:
+          submission.submittedBy ??
+          this.buildActorFromId(submission.submittedById),
+      });
+    }
+
+    return activities.sort(
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
+    );
+  }
+
+  private buildActorFromId(id?: bigint | null) {
+    return id ? { id } : undefined;
   }
 
   private buildAvailableActions(

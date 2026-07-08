@@ -276,6 +276,13 @@ describe('SubmissionsService', () => {
       await expect(service.findOne(111n, 888n)).resolves.toEqual({
         ...submission,
         availableActions: [],
+        activities: [
+          {
+            type: 'created',
+            occurredAt: submission.createdAt,
+            actor: { id: userId },
+          },
+        ],
       });
 
       expect(prisma.submission.findFirst).toHaveBeenCalledWith({
@@ -303,6 +310,20 @@ describe('SubmissionsService', () => {
           ],
         },
         include: {
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          submittedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
           documentDefinition: {
             select: {
               id: true,
@@ -444,6 +465,101 @@ describe('SubmissionsService', () => {
       });
     });
 
+    it('returns timeline activities ordered by occurrence time', async () => {
+      const submittedAt = new Date('2026-01-02T00:00:00.000Z');
+      const decidedAt = new Date('2026-01-03T00:00:00.000Z');
+      const approvedAt = new Date('2026-01-04T00:00:00.000Z');
+
+      prisma.submission.findFirst.mockResolvedValue({
+        ...submission,
+        status: 'approved',
+        submittedAt,
+        submittedById: 888n,
+        submittedBy: {
+          id: 888n,
+          name: 'Applicant',
+          email: 'applicant@example.com',
+        },
+        approvedAt,
+        appliedApprovalPolicies: [
+          {
+            id: 1n,
+            position: 1,
+            status: 'approved',
+            approvalPolicy: {
+              id: 10n,
+              name: 'Manager approval',
+            },
+            requirements: [
+              {
+                status: 'approved',
+                approvalRequirement: {
+                  id: 20n,
+                  name: 'Manager',
+                },
+                approvers: [
+                  {
+                    userId: 999n,
+                    status: 'approved',
+                    decisions: [
+                      {
+                        decision: 'approved',
+                        comment: 'Looks good',
+                        decidedAt,
+                        actor: {
+                          id: 999n,
+                          name: 'Approver',
+                          email: 'approver@example.com',
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+
+      await expect(service.findOne(111n, 888n)).resolves.toMatchObject({
+        activities: [
+          {
+            type: 'created',
+            occurredAt: submission.createdAt,
+            actor: { id: userId },
+          },
+          {
+            type: 'submitted',
+            occurredAt: submittedAt,
+            actor: {
+              id: 888n,
+              name: 'Applicant',
+              email: 'applicant@example.com',
+            },
+          },
+          {
+            type: 'approval_decision',
+            occurredAt: decidedAt,
+            decision: 'approved',
+            comment: 'Looks good',
+            approvalPolicy: {
+              id: 10n,
+              name: 'Manager approval',
+              position: 1,
+            },
+            approvalRequirement: {
+              id: 20n,
+              name: 'Manager',
+            },
+          },
+          {
+            type: 'approved',
+            occurredAt: approvedAt,
+          },
+        ],
+      });
+    });
+
     it('does not return approver actions when current approval policy is not set', async () => {
       prisma.submission.findFirst.mockResolvedValue({
         ...submission,
@@ -505,6 +621,20 @@ describe('SubmissionsService', () => {
           ],
         },
         include: {
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          submittedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
           documentDefinition: {
             select: {
               id: true,
