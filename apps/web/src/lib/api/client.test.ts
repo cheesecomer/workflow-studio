@@ -1,7 +1,7 @@
 vi.mock('server-only', () => ({}));
 vi.mock('../env', () => ({ env: { API_URL: 'http://api.test' } }));
 
-import { apiRequest, ApiClientError } from './client';
+import { apiRequest, ApiClientError, buildQueryString } from './client';
 
 describe('apiRequest', () => {
   afterEach(() => {
@@ -145,5 +145,18 @@ describe('apiRequest', () => {
     );
 
     await expect(apiRequest('/documents')).rejects.toThrow('API error (500)');
+  });
+});
+
+describe('buildQueryString', () => {
+  it('returns an empty string when there are no defined params', () => {
+    expect(buildQueryString({})).toBe('');
+    expect(buildQueryString({ status: undefined })).toBe('');
+  });
+
+  it('omits undefined params but keeps defined ones', () => {
+    expect(
+      buildQueryString({ status: 'draft', page: 2, limit: undefined }),
+    ).toBe('?status=draft&page=2');
   });
 });
