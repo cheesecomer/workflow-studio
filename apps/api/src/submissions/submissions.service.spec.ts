@@ -273,7 +273,10 @@ describe('SubmissionsService', () => {
     it('returns a submission', async () => {
       prisma.submission.findFirst.mockResolvedValue(submission);
 
-      await expect(service.findOne(111n, 888n)).resolves.toEqual(submission);
+      await expect(service.findOne(111n, 888n)).resolves.toEqual({
+        ...submission,
+        availableActions: [],
+      });
 
       expect(prisma.submission.findFirst).toHaveBeenCalledWith({
         where: {
@@ -385,6 +388,88 @@ describe('SubmissionsService', () => {
             },
           },
         },
+      });
+    });
+
+    it('returns draft owner actions', async () => {
+      prisma.submission.findFirst.mockResolvedValue({
+        ...submission,
+        createdById: 888n,
+      });
+
+      await expect(service.findOne(111n, 888n)).resolves.toMatchObject({
+        availableActions: ['submit', 'edit', 'delete'],
+      });
+    });
+
+    it('returns submitted applicant action', async () => {
+      prisma.submission.findFirst.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+        submittedById: 888n,
+        appliedApprovalPolicies: [],
+      });
+
+      await expect(service.findOne(111n, 888n)).resolves.toMatchObject({
+        availableActions: ['withdraw'],
+      });
+    });
+
+    it('returns current approver actions', async () => {
+      prisma.submission.findFirst.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+        currentAppliedApprovalPolicyId: 1n,
+        appliedApprovalPolicies: [
+          {
+            id: 1n,
+            status: 'pending',
+            requirements: [
+              {
+                status: 'pending',
+                approvers: [
+                  {
+                    userId: 888n,
+                    status: 'pending',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+
+      await expect(service.findOne(111n, 888n)).resolves.toMatchObject({
+        availableActions: ['approve', 'reject'],
+      });
+    });
+
+    it('does not return approver actions when current approval policy is not set', async () => {
+      prisma.submission.findFirst.mockResolvedValue({
+        ...submission,
+        status: 'submitted',
+        currentAppliedApprovalPolicyId: null,
+        appliedApprovalPolicies: [
+          {
+            id: 1n,
+            status: 'pending',
+            requirements: [
+              {
+                status: 'pending',
+                approvers: [
+                  {
+                    userId: 888n,
+                    status: 'pending',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+
+      await expect(service.findOne(111n, 888n)).resolves.toMatchObject({
+        availableActions: [],
       });
     });
 

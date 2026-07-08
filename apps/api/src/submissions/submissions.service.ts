@@ -31,6 +31,32 @@ function parseSubmissionStatus(status?: string) {
   return status;
 }
 
+type SubmissionAvailableAction =
+  | 'submit'
+  | 'edit'
+  | 'delete'
+  | 'approve'
+  | 'reject'
+  | 'withdraw';
+
+type SubmissionForAvailableActions = {
+  status: string;
+  createdById: bigint;
+  submittedById?: bigint | null;
+  currentAppliedApprovalPolicyId?: bigint | null;
+  appliedApprovalPolicies?: {
+    id: bigint;
+    status: string;
+    requirements: {
+      status: string;
+      approvers: {
+        userId: bigint;
+        status: string;
+      }[];
+    }[];
+  }[];
+};
+
 @Injectable()
 export class SubmissionsService {
   constructor(
@@ -286,7 +312,65 @@ export class SubmissionsService {
       throw new NotFoundException('Submission not found');
     }
 
-    return submission;
+    return {
+      ...submission,
+      availableActions: this.buildAvailableActions(submission, currentUserId),
+    };
+  }
+
+  private buildAvailableActions(
+    submission: SubmissionForAvailableActions,
+    currentUserId: bigint,
+  ): SubmissionAvailableAction[] {
+    const actions: SubmissionAvailableAction[] = [];
+
+    if (
+      submission.status === SubmissionStatus.draft &&
+      submission.createdById === currentUserId
+    ) {
+      actions.push('submit', 'edit', 'delete');
+    }
+
+    if (submission.status !== SubmissionStatus.submitted) {
+      return actions;
+    }
+
+    if (submission.submittedById === currentUserId) {
+      actions.push('withdraw');
+    }
+
+    if (this.isCurrentApprover(submission, currentUserId)) {
+      actions.push('approve', 'reject');
+    }
+
+    return actions;
+  }
+
+  private isCurrentApprover(
+    submission: SubmissionForAvailableActions,
+    currentUserId: bigint,
+  ) {
+    return (
+      submission.appliedApprovalPolicies?.some((policy) => {
+        const isCurrentPolicy =
+          submission.currentAppliedApprovalPolicyId != null &&
+          policy.id === submission.currentAppliedApprovalPolicyId;
+
+        return (
+          isCurrentPolicy &&
+          policy.status === 'pending' &&
+          policy.requirements.some(
+            (requirement) =>
+              requirement.status === 'pending' &&
+              requirement.approvers.some(
+                (approver) =>
+                  approver.userId === currentUserId &&
+                  approver.status === 'pending',
+              ),
+          )
+        );
+      }) ?? false
+    );
   }
 
   async update(
