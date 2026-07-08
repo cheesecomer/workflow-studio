@@ -39,8 +39,12 @@ export class SubmissionsController {
   }
 
   @Get('/approvable')
-  findApprovable(@CurrentUserDecorator() user: CurrentUser) {
-    return this.submissionsService.findApprovable(user.id);
+  findApprovable(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.submissionsService.findApprovable(user.id, { page, limit });
   }
 
   @Get(':id')

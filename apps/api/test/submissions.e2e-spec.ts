@@ -879,40 +879,52 @@ describe('SubmissionsController (e2e)', () => {
         .get('/submissions/approvable')
         .expect(200);
 
-      expect(response.body).toHaveLength(1);
-      expect(
-        (
-          response.body as {
+      const body = response.body as {
+        items: {
+          id: string;
+          status: string;
+          documentDefinition: {
             id: string;
-            status: string;
-            documentDefinition: {
+            documentId: string;
+            name: string;
+            version: number;
+          };
+          createdBy: {
+            id: string;
+            name: string;
+            email: string;
+          };
+          applicantDepartment: {
+            id: string;
+            name: string;
+          };
+          submittedAt: string;
+          currentAppliedApprovalPolicy: {
+            id: string;
+            approvalPolicy: {
               id: string;
-              documentId: string;
               name: string;
-              version: number;
+              operator: string;
+              position: number;
             };
-            createdBy: {
-              id: string;
-              name: string;
-              email: string;
-            };
-            applicantDepartment: {
-              id: string;
-              name: string;
-            };
-            submittedAt: string;
-            currentAppliedApprovalPolicy: {
-              id: string;
-              approvalPolicy: {
-                id: string;
-                name: string;
-                operator: string;
-                position: number;
-              };
-            };
-          }[]
-        )[0],
-      ).toMatchObject({
+          };
+        }[];
+        meta: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
+      };
+
+      expect(body.meta).toEqual({
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+      });
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0]).toMatchObject({
         id: approvableSubmission.id.toString(),
         status: 'submitted',
         submittedAt: '2026-01-01T00:00:00.000Z',

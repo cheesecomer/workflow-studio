@@ -1771,7 +1771,62 @@ describe('SubmissionsService', () => {
   });
 
   describe('findApprovable', () => {
-    it('returns submitted submissions that the user can approve', async () => {
+    const approvableListInclude = {
+      documentDefinition: {
+        select: {
+          id: true,
+          documentId: true,
+          name: true,
+          version: true,
+        },
+      },
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      applicantDepartment: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      currentAppliedApprovalPolicy: {
+        select: {
+          id: true,
+          approvalPolicy: {
+            select: {
+              id: true,
+              name: true,
+              operator: true,
+              position: true,
+            },
+          },
+        },
+      },
+    };
+
+    const approvableWhere = {
+      status: 'submitted',
+      currentAppliedApprovalPolicy: {
+        status: 'pending',
+        requirements: {
+          some: {
+            status: 'pending',
+            approvers: {
+              some: {
+                userId: 3n,
+                status: 'pending',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    it('returns paginated submitted submissions that the user can approve', async () => {
       const submissions = [
         {
           id: 1n,
@@ -1804,67 +1859,67 @@ describe('SubmissionsService', () => {
       ];
 
       prisma.submission.findMany.mockResolvedValue(submissions);
+      prisma.submission.count.mockResolvedValue(1);
 
-      await expect(service.findApprovable(3n)).resolves.toBe(submissions);
+      await expect(service.findApprovable(3n)).resolves.toEqual({
+        items: submissions,
+        meta: {
+          page: 1,
+          limit: 20,
+          total: 1,
+          totalPages: 1,
+        },
+      });
 
       expect(prisma.submission.findMany).toHaveBeenCalledWith({
-        where: {
-          status: 'submitted',
-          currentAppliedApprovalPolicy: {
-            status: 'pending',
-            requirements: {
-              some: {
-                status: 'pending',
-                approvers: {
-                  some: {
-                    userId: 3n,
-                    status: 'pending',
-                  },
-                },
-              },
-            },
-          },
-        },
-        include: {
-          documentDefinition: {
-            select: {
-              id: true,
-              documentId: true,
-              name: true,
-              version: true,
-            },
-          },
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          applicantDepartment: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          currentAppliedApprovalPolicy: {
-            select: {
-              id: true,
-              approvalPolicy: {
-                select: {
-                  id: true,
-                  name: true,
-                  operator: true,
-                  position: true,
-                },
-              },
-            },
-          },
-        },
+        where: approvableWhere,
+        include: approvableListInclude,
         orderBy: {
           submittedAt: 'asc',
         },
+        skip: 0,
+        take: 20,
       });
+      expect(prisma.submission.count).toHaveBeenCalledWith({
+        where: approvableWhere,
+      });
+    });
+
+    it('paginates approvable submissions', async () => {
+      prisma.submission.findMany.mockResolvedValue([]);
+      prisma.submission.count.mockResolvedValue(45);
+
+      await expect(
+        service.findApprovable(3n, { page: '2', limit: '10' }),
+      ).resolves.toEqual({
+        items: [],
+        meta: {
+          page: 2,
+          limit: 10,
+          total: 45,
+          totalPages: 5,
+        },
+      });
+
+      expect(prisma.submission.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 10,
+          take: 10,
+        }),
+      );
+    });
+
+    it('throws BadRequestException when pagination query is invalid', async () => {
+      await expect(service.findApprovable(3n, { page: '0' })).rejects.toThrow(
+        BadRequestException,
+      );
+
+      await expect(
+        service.findApprovable(3n, { limit: '101' }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.submission.findMany).not.toHaveBeenCalled();
+      expect(prisma.submission.count).not.toHaveBeenCalled();
     });
   });
 });

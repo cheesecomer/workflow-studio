@@ -169,12 +169,28 @@ describe('SubmissionsController', () => {
     });
   });
 
-  describe('remove', () => {
+  describe('findApprovable', () => {
     it('delegates to service with current user id', async () => {
       await controller.findApprovable(currentUser);
 
       expect(submissionService.findApprovable).toHaveBeenCalledWith(
         currentUser.id,
+        {
+          page: undefined,
+          limit: undefined,
+        },
+      );
+    });
+
+    it('delegates to service with current user id and pagination', async () => {
+      await controller.findApprovable(currentUser, '2', '10');
+
+      expect(submissionService.findApprovable).toHaveBeenCalledWith(
+        currentUser.id,
+        {
+          page: '2',
+          limit: '10',
+        },
       );
     });
   });
