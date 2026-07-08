@@ -1084,65 +1084,83 @@ export class SubmissionsService {
     });
   }
 
-  async findApprovable(userId: bigint) {
-    return this.prisma.submission.findMany({
-      where: {
-        status: 'submitted',
-        currentAppliedApprovalPolicy: {
-          status: 'pending',
-          requirements: {
-            some: {
-              status: 'pending',
-              approvers: {
-                some: {
-                  userId,
-                  status: 'pending',
+  async findApprovable(userId: bigint, paginationQuery: PaginationQuery = {}) {
+    const { page, limit, skip } = parsePaginationQuery(paginationQuery);
+    const where: Prisma.SubmissionWhereInput = {
+      status: 'submitted',
+      currentAppliedApprovalPolicy: {
+        status: 'pending',
+        requirements: {
+          some: {
+            status: 'pending',
+            approvers: {
+              some: {
+                userId,
+                status: 'pending',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.submission.findMany({
+        where,
+        include: {
+          documentDefinition: {
+            select: {
+              id: true,
+              documentId: true,
+              name: true,
+              version: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          applicantDepartment: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          currentAppliedApprovalPolicy: {
+            select: {
+              id: true,
+              approvalPolicy: {
+                select: {
+                  id: true,
+                  name: true,
+                  operator: true,
+                  position: true,
                 },
               },
             },
           },
         },
+        orderBy: {
+          submittedAt: 'asc',
+        },
+        skip,
+        take: limit,
+      }),
+      this.prisma.submission.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-      include: {
-        documentDefinition: {
-          select: {
-            id: true,
-            documentId: true,
-            name: true,
-            version: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        applicantDepartment: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        currentAppliedApprovalPolicy: {
-          select: {
-            id: true,
-            approvalPolicy: {
-              select: {
-                id: true,
-                name: true,
-                operator: true,
-                position: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        submittedAt: 'asc',
-      },
-    });
+    };
   }
 
   private async resolveApplicantDepartmentId(
