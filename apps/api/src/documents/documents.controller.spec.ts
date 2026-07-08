@@ -11,6 +11,7 @@ describe('DocumentsController', () => {
 
   const documentsService = {
     findAll: jest.fn(),
+    findSubmittable: jest.fn(),
     findOne: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
@@ -49,6 +50,14 @@ describe('DocumentsController', () => {
       await controller.findAll(currentUser);
 
       expect(documentsService.findAll).toHaveBeenCalledWith();
+    });
+  });
+
+  describe('findSubmittable', () => {
+    it('delegates to service with current user id', async () => {
+      await controller.findSubmittable(currentUser);
+
+      expect(documentsService.findSubmittable).toHaveBeenCalledWith();
     });
   });
 

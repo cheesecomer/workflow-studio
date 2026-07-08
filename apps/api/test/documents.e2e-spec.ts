@@ -341,4 +341,65 @@ describe('DocumentsController (e2e)', () => {
       requiredCount: 3,
     });
   });
+
+  describe('GET /documents/submittable', () => {
+    it('returns only documents with a published definition', async () => {
+      const currentUser = await prisma.user.findUniqueOrThrow({
+        where: { email: 'admin@example.com' },
+      });
+
+      const publishedDocument = await prisma.document.create({
+        data: {
+          name: 'Submittable Expense Request',
+          draftContent: {},
+          publishedContent: {},
+        },
+      });
+
+      const publishedDefinition = await prisma.documentDefinition.create({
+        data: {
+          name: 'Submittable Expense Request',
+          documentId: publishedDocument.id,
+          version: 1,
+          publishedById: currentUser.id,
+        },
+      });
+
+      await prisma.document.update({
+        where: { id: publishedDocument.id },
+        data: { currentDocumentDefinitionId: publishedDefinition.id },
+      });
+
+      await prisma.document.create({
+        data: {
+          name: 'Draft Only Document',
+          draftContent: {},
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/documents/submittable')
+        .expect(200);
+
+      const body = response.body as {
+        id: string;
+        documentId: string;
+        name: string;
+        version: number;
+      }[];
+
+      expect(
+        body.find(
+          (item) => item.documentId === publishedDocument.id.toString(),
+        ),
+      ).toMatchObject({
+        id: publishedDefinition.id.toString(),
+        name: 'Submittable Expense Request',
+        version: 1,
+      });
+      expect(body.some((item) => item.name === 'Draft Only Document')).toBe(
+        false,
+      );
+    });
+  });
 });

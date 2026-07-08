@@ -37,6 +37,9 @@ describe('DocumentsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    documentDefinition: {
+      findMany: jest.fn(),
+    },
     $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
       callback(tx),
     ),
@@ -73,6 +76,35 @@ describe('DocumentsService', () => {
 
       expect(prisma.document.findMany).toHaveBeenCalledWith({
         orderBy: { updatedAt: 'desc' },
+      });
+    });
+  });
+
+  describe('findSubmittable', () => {
+    it('finds document definitions that are currently published', async () => {
+      const definitions = [
+        {
+          id: 10n,
+          documentId: documentId,
+          name: 'Expense Request',
+          version: 1,
+        },
+      ];
+      prisma.documentDefinition.findMany.mockResolvedValue(definitions);
+
+      await expect(service.findSubmittable()).resolves.toBe(definitions);
+
+      expect(prisma.documentDefinition.findMany).toHaveBeenCalledWith({
+        where: {
+          currentForDocuments: { some: {} },
+        },
+        select: {
+          id: true,
+          documentId: true,
+          name: true,
+          version: true,
+        },
+        orderBy: { name: 'asc' },
       });
     });
   });

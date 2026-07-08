@@ -25,6 +25,13 @@ export class DocumentsController {
     return this.documentsService.findAll();
   }
 
+  @Get('/submittable')
+  findSubmittable(@CurrentUserDecorator() user: CurrentUser) {
+    void user;
+
+    return this.documentsService.findSubmittable();
+  }
+
   @Get(':id')
   findOne(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: bigint) {
     void user;
