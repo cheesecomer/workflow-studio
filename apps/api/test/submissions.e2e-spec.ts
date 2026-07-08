@@ -959,6 +959,29 @@ describe('SubmissionsController (e2e)', () => {
         },
       });
 
+      const basicGroup = await prisma.fieldGroupDefinition.create({
+        data: {
+          documentDefinitionId: documentDefinition.id,
+          label: '品目',
+          key: 'items',
+          position: 1,
+          repeatable: false,
+          minRows: 1,
+        },
+      });
+
+      const titleField = await prisma.fieldDefinition.create({
+        data: {
+          fieldGroupDefinitionId: basicGroup.id,
+          label: '品目',
+          key: 'title',
+          fieldType: 'text',
+          required: true,
+          position: 1,
+          settings: {},
+        },
+      });
+
       const submittedSubmission = await prisma.submission.create({
         data: {
           documentDefinitionId: documentDefinition.id,
@@ -1034,6 +1057,33 @@ describe('SubmissionsController (e2e)', () => {
         id: submittedSubmission.id.toString(),
         documentDefinitionId: documentDefinition.id.toString(),
         status: 'submitted',
+        documentDefinition: {
+          id: documentDefinition.id.toString(),
+          documentId: document.id.toString(),
+          name: '経費申請',
+          version: 1,
+          fieldGroupDefinitions: [
+            {
+              id: basicGroup.id.toString(),
+              label: '品目',
+              key: 'items',
+              position: 1,
+              repeatable: false,
+              minRows: 1,
+              fieldDefinitions: [
+                {
+                  id: titleField.id.toString(),
+                  label: '品目',
+                  key: 'title',
+                  fieldType: 'text',
+                  required: true,
+                  position: 1,
+                  settings: {},
+                },
+              ],
+            },
+          ],
+        },
         fieldGroupRows: [],
         appliedApprovalPolicies: [
           {
