@@ -1057,6 +1057,7 @@ describe('SubmissionsController (e2e)', () => {
         id: submittedSubmission.id.toString(),
         documentDefinitionId: documentDefinition.id.toString(),
         status: 'submitted',
+        availableActions: ['withdraw', 'approve', 'reject'],
         documentDefinition: {
           id: documentDefinition.id.toString(),
           documentId: document.id.toString(),
