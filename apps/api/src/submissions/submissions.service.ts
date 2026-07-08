@@ -31,6 +31,44 @@ function parseSubmissionStatus(status?: string) {
   return status;
 }
 
+type PaginationQuery = {
+  page?: string;
+  limit?: string;
+};
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+function parsePositiveInteger(value: string | undefined, fieldName: string) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new BadRequestException(`Invalid ${fieldName}`);
+  }
+
+  return parsed;
+}
+
+function parsePaginationQuery(query: PaginationQuery = {}) {
+  const page = parsePositiveInteger(query.page, 'page') ?? DEFAULT_PAGE;
+  const limit = parsePositiveInteger(query.limit, 'limit') ?? DEFAULT_LIMIT;
+
+  if (limit > MAX_LIMIT) {
+    throw new BadRequestException('Invalid limit');
+  }
+
+  return {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+  };
+}
+
 type SubmissionAvailableAction =
   | 'submit'
   | 'edit'
@@ -214,8 +252,13 @@ export class SubmissionsService {
     });
   }
 
-  async findAll(createdById: bigint, status?: string) {
+  async findAll(
+    createdById: bigint,
+    status?: string,
+    paginationQuery: PaginationQuery = {},
+  ) {
     const submissionStatus = parseSubmissionStatus(status);
+    const { page, limit, skip } = parsePaginationQuery(paginationQuery);
     const where: Prisma.SubmissionWhereInput = {
       createdById,
     };
@@ -224,38 +267,53 @@ export class SubmissionsService {
       where.status = submissionStatus;
     }
 
-    return this.prisma.submission.findMany({
-      where,
-      include: {
-        documentDefinition: {
-          select: {
-            id: true,
-            documentId: true,
-            name: true,
-            version: true,
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.submission.findMany({
+        where,
+        include: {
+          documentDefinition: {
+            select: {
+              id: true,
+              documentId: true,
+              name: true,
+              version: true,
+            },
           },
-        },
-        applicantDepartment: {
-          select: {
-            id: true,
-            name: true,
+          applicantDepartment: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
-        },
-        currentAppliedApprovalPolicy: {
-          include: {
-            approvalPolicy: {
-              select: {
-                id: true,
-                name: true,
-                operator: true,
-                position: true,
+          currentAppliedApprovalPolicy: {
+            include: {
+              approvalPolicy: {
+                select: {
+                  id: true,
+                  name: true,
+                  operator: true,
+                  position: true,
+                },
               },
             },
           },
         },
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.submission.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-      orderBy: { updatedAt: 'desc' },
-    });
+    };
   }
 
   async findOne(id: bigint, currentUserId: bigint) {

@@ -52,15 +52,23 @@ describe('SubmissionsController', () => {
       expect(submissionService.findAll).toHaveBeenCalledWith(
         currentUser.id,
         undefined,
+        {
+          page: undefined,
+          limit: undefined,
+        },
       );
     });
 
     it('delegates to service with current user id and status', async () => {
-      await controller.findAll(currentUser, 'draft');
+      await controller.findAll(currentUser, 'draft', '2', '10');
 
       expect(submissionService.findAll).toHaveBeenCalledWith(
         currentUser.id,
         'draft',
+        {
+          page: '2',
+          limit: '10',
+        },
       );
     });
   });
