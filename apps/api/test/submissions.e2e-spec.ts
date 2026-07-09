@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 
@@ -43,6 +43,14 @@ describe('SubmissionsController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalInterceptors(new BigIntInterceptor());
+    // See positions.e2e-spec.ts for why this must mirror main.ts exactly.
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+        forbidNonWhitelisted: true,
+      }),
+    );
     prisma = app.get(PrismaService);
 
     await app.init();
@@ -273,6 +281,33 @@ describe('SubmissionsController (e2e)', () => {
     await request(app.getHttpServer())
       .get(`/submissions/${submissionId}`)
       .expect(404);
+  });
+
+  it('rejects POST /submissions with an unrecognized property (whitelist validation)', async () => {
+    const document = await prisma.document.create({
+      data: { name: '経費申請', draftContent: {}, publishedContent: {} },
+    });
+    const documentDefinition = await prisma.documentDefinition.create({
+      data: {
+        name: '経費申請',
+        documentId: document.id,
+        version: 1,
+        publishedById: (
+          await prisma.user.findUniqueOrThrow({
+            where: { email: 'admin@example.com' },
+          })
+        ).id,
+      },
+    });
+
+    await request(app.getHttpServer())
+      .post('/submissions')
+      .send({
+        documentDefinitionId: documentDefinition.id.toString(),
+        fieldGroupRows: [],
+        notAValidProperty: 'should be rejected',
+      })
+      .expect(400);
   });
 
   describe('GET /submissions', () => {
