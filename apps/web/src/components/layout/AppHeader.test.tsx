@@ -17,4 +17,13 @@ describe('AppHeader', () => {
       '/documents',
     );
   });
+
+  it('links to the submission list screen', () => {
+    render(<AppHeader />);
+
+    expect(screen.getByRole('link', { name: '申請一覧' })).toHaveAttribute(
+      'href',
+      '/submissions',
+    );
+  });
 });

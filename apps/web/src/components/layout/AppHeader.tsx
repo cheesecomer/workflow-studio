@@ -6,6 +6,9 @@ export function AppHeader() {
       <div className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4">
         <span className="text-lg font-semibold">Workflow Studio</span>
         <nav className="flex gap-4 text-sm">
+          <Link href="/submissions" className="hover:underline">
+            申請一覧
+          </Link>
           <Link href="/documents" className="hover:underline">
             申請書管理
           </Link>
