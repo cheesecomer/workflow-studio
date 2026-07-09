@@ -2,9 +2,15 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { createDocument, deleteDocument } from '../api/documents';
+import {
+  createDocument,
+  deleteDocument,
+  publishDocument,
+  updateDocument,
+} from '../api/documents';
 import { ApiClientError } from '../api/client';
 import { toActionErrorMessage } from '../errors';
+import type { DocumentDraft } from '@/types/api';
 
 export type DocumentActionState = { ok: boolean; message?: string } | null;
 
@@ -37,4 +43,40 @@ export async function deleteDocumentAction(id: string): Promise<void> {
   await deleteDocument(id);
   revalidatePath('/documents');
   redirect('/documents');
+}
+
+export async function updateDocumentAction(
+  id: string,
+  input: { name: string; draftContent: DocumentDraft },
+): Promise<DocumentActionState> {
+  try {
+    await updateDocument(id, input);
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      return { ok: false, message: toActionErrorMessage(error) };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/documents/${id}`);
+  revalidatePath(`/documents/${id}/edit`);
+  return { ok: true, message: '下書きを保存しました' };
+}
+
+export async function publishDocumentAction(
+  id: string,
+  input: { name: string; draftContent: DocumentDraft },
+): Promise<DocumentActionState> {
+  try {
+    await publishDocument(id, input);
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      return { ok: false, message: toActionErrorMessage(error) };
+    }
+    throw error;
+  }
+
+  revalidatePath('/documents');
+  revalidatePath(`/documents/${id}`);
+  redirect(`/documents/${id}`);
 }
