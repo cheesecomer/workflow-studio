@@ -83,4 +83,62 @@ describe('DynamicSubmissionForm', () => {
     expect(action).toHaveBeenCalled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('does not render a secondary button when secondaryAction is not given', () => {
+    render(
+      <DynamicSubmissionForm
+        fieldGroupDefinitions={[group]}
+        action={async () => null}
+        submitLabel="下書き保存"
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: '提出' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('calls only the secondary action when its button is clicked, not the primary one', async () => {
+    const user = userEvent.setup();
+    const primaryAction = vi.fn().mockResolvedValue({ ok: true });
+    const secondaryAction = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <DynamicSubmissionForm
+        fieldGroupDefinitions={[group]}
+        action={primaryAction}
+        submitLabel="下書き保存"
+        secondaryAction={{ action: secondaryAction, label: '提出' }}
+      />,
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /件名/ }), '出張申請');
+    await user.click(screen.getByRole('button', { name: '提出' }));
+
+    expect(secondaryAction).toHaveBeenCalled();
+    expect(primaryAction).not.toHaveBeenCalled();
+  });
+
+  it('shows the error message from the secondary action', async () => {
+    const user = userEvent.setup();
+    const secondaryAction = vi
+      .fn()
+      .mockResolvedValue({ ok: false, message: '提出できませんでした' });
+
+    render(
+      <DynamicSubmissionForm
+        fieldGroupDefinitions={[group]}
+        action={async () => null}
+        submitLabel="下書き保存"
+        secondaryAction={{ action: secondaryAction, label: '提出' }}
+      />,
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /件名/ }), '出張申請');
+    await user.click(screen.getByRole('button', { name: '提出' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '提出できませんでした',
+    );
+  });
 });
