@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -17,6 +17,14 @@ describe('DepartmentsController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalInterceptors(new BigIntInterceptor());
+    // See positions.e2e-spec.ts for why this must mirror main.ts exactly.
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+        forbidNonWhitelisted: true,
+      }),
+    );
     prisma = app.get(PrismaService);
 
     await app.init();
