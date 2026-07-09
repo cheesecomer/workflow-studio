@@ -9,21 +9,28 @@ vi.mock('../api/submissions', () => ({
   createSubmission: vi.fn(),
   updateSubmission: vi.fn(),
   submitSubmission: vi.fn(),
+  deleteSubmission: vi.fn(),
+  withdrawSubmission: vi.fn(),
 }));
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import {
   createSubmission,
+  deleteSubmission,
   submitSubmission,
   updateSubmission,
+  withdrawSubmission,
 } from '../api/submissions';
 import { ApiClientError } from '../api/client';
 import { buildFieldName } from '../submission-form-data';
 import {
   createSubmissionAction,
+  deleteSubmissionAction,
   submitSubmissionAction,
+  submitSubmissionDirectlyAction,
   updateSubmissionAction,
+  withdrawSubmissionAction,
 } from './submissions';
 import type { FieldGroupDefinition } from '@/types/api';
 
@@ -242,5 +249,69 @@ describe('submitSubmissionAction', () => {
     await expect(
       submitSubmissionAction('1', [group], null, formDataWithSubject('x')),
     ).rejects.toThrow('network down');
+  });
+});
+
+describe('submitSubmissionDirectlyAction', () => {
+  afterEach(() => {
+    vi.mocked(submitSubmission).mockReset();
+    vi.mocked(redirect).mockClear();
+    vi.mocked(revalidatePath).mockClear();
+  });
+
+  it('submits without saving any form values, then redirects to the detail page', async () => {
+    vi.mocked(submitSubmission).mockResolvedValue({ id: '1' } as never);
+
+    await expect(submitSubmissionDirectlyAction('1')).rejects.toThrow(
+      'REDIRECT:/submissions/1',
+    );
+
+    expect(submitSubmission).toHaveBeenCalledWith('1');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions/1');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions/1/edit');
+    expect(redirect).toHaveBeenCalledWith('/submissions/1');
+  });
+});
+
+describe('withdrawSubmissionAction', () => {
+  afterEach(() => {
+    vi.mocked(withdrawSubmission).mockReset();
+    vi.mocked(redirect).mockClear();
+    vi.mocked(revalidatePath).mockClear();
+  });
+
+  it('withdraws the submission, revalidates, and redirects to the detail page', async () => {
+    vi.mocked(withdrawSubmission).mockResolvedValue({ id: '1' } as never);
+
+    await expect(withdrawSubmissionAction('1')).rejects.toThrow(
+      'REDIRECT:/submissions/1',
+    );
+
+    expect(withdrawSubmission).toHaveBeenCalledWith('1');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions/1');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions/1/edit');
+    expect(redirect).toHaveBeenCalledWith('/submissions/1');
+  });
+});
+
+describe('deleteSubmissionAction', () => {
+  afterEach(() => {
+    vi.mocked(deleteSubmission).mockReset();
+    vi.mocked(redirect).mockClear();
+    vi.mocked(revalidatePath).mockClear();
+  });
+
+  it('deletes the submission, revalidates, and redirects to the list', async () => {
+    vi.mocked(deleteSubmission).mockResolvedValue({ id: '1' } as never);
+
+    await expect(deleteSubmissionAction('1')).rejects.toThrow(
+      'REDIRECT:/submissions',
+    );
+
+    expect(deleteSubmission).toHaveBeenCalledWith('1');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions');
+    expect(redirect).toHaveBeenCalledWith('/submissions');
   });
 });
