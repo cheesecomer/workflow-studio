@@ -4,8 +4,10 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import {
   createSubmission,
+  deleteSubmission,
   submitSubmission,
   updateSubmission,
+  withdrawSubmission,
 } from '../api/submissions';
 import { ApiClientError } from '../api/client';
 import { toActionErrorMessage } from '../errors';
@@ -96,4 +98,29 @@ export async function submitSubmissionAction(
   revalidatePath(`/submissions/${id}`);
   revalidatePath(`/submissions/${id}/edit`);
   redirect(`/submissions/${id}`);
+}
+
+// Submits from the detail page, where there's no form to save first — just
+// transitions status on whatever was last saved via updateSubmissionAction
+// (POST /submissions/:id/submit itself takes no body).
+export async function submitSubmissionDirectlyAction(id: string): Promise<void> {
+  await submitSubmission(id);
+  revalidatePath('/submissions');
+  revalidatePath(`/submissions/${id}`);
+  revalidatePath(`/submissions/${id}/edit`);
+  redirect(`/submissions/${id}`);
+}
+
+export async function withdrawSubmissionAction(id: string): Promise<void> {
+  await withdrawSubmission(id);
+  revalidatePath('/submissions');
+  revalidatePath(`/submissions/${id}`);
+  revalidatePath(`/submissions/${id}/edit`);
+  redirect(`/submissions/${id}`);
+}
+
+export async function deleteSubmissionAction(id: string): Promise<void> {
+  await deleteSubmission(id);
+  revalidatePath('/submissions');
+  redirect('/submissions');
 }
