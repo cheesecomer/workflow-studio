@@ -2,6 +2,8 @@ vi.mock('@/lib/actions/submissions', () => ({
   deleteSubmissionAction: vi.fn(),
   submitSubmissionDirectlyAction: vi.fn(),
   withdrawSubmissionAction: vi.fn(),
+  approveSubmissionAction: vi.fn(),
+  rejectSubmissionAction: vi.fn(),
 }));
 
 import { render, screen } from '@testing-library/react';
@@ -51,5 +53,32 @@ describe('SubmissionActionButtons', () => {
 
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('renders a comment field and both approve/reject buttons for an approver', () => {
+    render(
+      <SubmissionActionButtons
+        id="1"
+        availableActions={['approve', 'reject']}
+      />,
+    );
+
+    expect(
+      screen.getByRole('textbox', { name: 'コメント（任意）' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '承認' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '却下' })).toBeInTheDocument();
+  });
+
+  it('renders only approve when reject is not available, and vice versa', () => {
+    const { rerender } = render(
+      <SubmissionActionButtons id="1" availableActions={['approve']} />,
+    );
+    expect(screen.getByRole('button', { name: '承認' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '却下' })).not.toBeInTheDocument();
+
+    rerender(<SubmissionActionButtons id="1" availableActions={['reject']} />);
+    expect(screen.getByRole('button', { name: '却下' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '承認' })).not.toBeInTheDocument();
   });
 });

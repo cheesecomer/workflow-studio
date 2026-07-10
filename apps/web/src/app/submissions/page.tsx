@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { listSubmissions } from '@/lib/api/submissions';
 import { submissionStatusLabel } from '@/lib/format';
+import { parseLimit, parsePage } from '@/lib/pagination';
 import { buttonVariants } from '@/components/ui/button';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import type { SubmissionStatus } from '@/types/api';
@@ -19,16 +20,6 @@ const STATUS_FILTERS: SubmissionStatus[] = [
 
 function parseStatus(value: string | undefined): SubmissionStatus | undefined {
   return STATUS_FILTERS.find((status) => status === value);
-}
-
-function parsePage(value: string | undefined): number {
-  const page = Number(value);
-  return Number.isInteger(page) && page > 0 ? page : 1;
-}
-
-function parseLimit(value: string | undefined): number | undefined {
-  const limit = Number(value);
-  return Number.isInteger(limit) && limit > 0 ? limit : undefined;
 }
 
 function buildStatusHref(

@@ -11,13 +11,17 @@ vi.mock('../api/submissions', () => ({
   submitSubmission: vi.fn(),
   deleteSubmission: vi.fn(),
   withdrawSubmission: vi.fn(),
+  approveSubmission: vi.fn(),
+  rejectSubmission: vi.fn(),
 }));
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import {
+  approveSubmission,
   createSubmission,
   deleteSubmission,
+  rejectSubmission,
   submitSubmission,
   updateSubmission,
   withdrawSubmission,
@@ -25,8 +29,10 @@ import {
 import { ApiClientError } from '../api/client';
 import { buildFieldName } from '../submission-form-data';
 import {
+  approveSubmissionAction,
   createSubmissionAction,
   deleteSubmissionAction,
+  rejectSubmissionAction,
   submitSubmissionAction,
   submitSubmissionDirectlyAction,
   updateSubmissionAction,
@@ -313,5 +319,77 @@ describe('deleteSubmissionAction', () => {
     expect(deleteSubmission).toHaveBeenCalledWith('1');
     expect(revalidatePath).toHaveBeenCalledWith('/submissions');
     expect(redirect).toHaveBeenCalledWith('/submissions');
+  });
+});
+
+function formDataWithComment(comment?: string): FormData {
+  const formData = new FormData();
+  if (comment !== undefined) {
+    formData.set('comment', comment);
+  }
+  return formData;
+}
+
+describe('approveSubmissionAction', () => {
+  afterEach(() => {
+    vi.mocked(approveSubmission).mockReset();
+    vi.mocked(redirect).mockClear();
+    vi.mocked(revalidatePath).mockClear();
+  });
+
+  it('approves with the given comment, revalidates, and redirects to the detail page', async () => {
+    vi.mocked(approveSubmission).mockResolvedValue({ id: '1' } as never);
+
+    await expect(
+      approveSubmissionAction('1', formDataWithComment('LGTM')),
+    ).rejects.toThrow('REDIRECT:/submissions/1');
+
+    expect(approveSubmission).toHaveBeenCalledWith('1', 'LGTM');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions/1');
+    expect(revalidatePath).toHaveBeenCalledWith('/approvals');
+    expect(redirect).toHaveBeenCalledWith('/submissions/1');
+  });
+
+  it('passes undefined when the comment is blank', async () => {
+    vi.mocked(approveSubmission).mockResolvedValue({ id: '1' } as never);
+
+    await expect(
+      approveSubmissionAction('1', formDataWithComment('   ')),
+    ).rejects.toThrow('REDIRECT:/submissions/1');
+
+    expect(approveSubmission).toHaveBeenCalledWith('1', undefined);
+  });
+
+  it('passes undefined when there is no comment field at all', async () => {
+    vi.mocked(approveSubmission).mockResolvedValue({ id: '1' } as never);
+
+    await expect(
+      approveSubmissionAction('1', formDataWithComment()),
+    ).rejects.toThrow('REDIRECT:/submissions/1');
+
+    expect(approveSubmission).toHaveBeenCalledWith('1', undefined);
+  });
+});
+
+describe('rejectSubmissionAction', () => {
+  afterEach(() => {
+    vi.mocked(rejectSubmission).mockReset();
+    vi.mocked(redirect).mockClear();
+    vi.mocked(revalidatePath).mockClear();
+  });
+
+  it('rejects with the given comment, revalidates, and redirects to the detail page', async () => {
+    vi.mocked(rejectSubmission).mockResolvedValue({ id: '1' } as never);
+
+    await expect(
+      rejectSubmissionAction('1', formDataWithComment('要修正')),
+    ).rejects.toThrow('REDIRECT:/submissions/1');
+
+    expect(rejectSubmission).toHaveBeenCalledWith('1', '要修正');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions');
+    expect(revalidatePath).toHaveBeenCalledWith('/submissions/1');
+    expect(revalidatePath).toHaveBeenCalledWith('/approvals');
+    expect(redirect).toHaveBeenCalledWith('/submissions/1');
   });
 });

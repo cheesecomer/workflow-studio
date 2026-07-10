@@ -26,4 +26,13 @@ describe('AppHeader', () => {
       '/submissions',
     );
   });
+
+  it('links to the approvals list screen', () => {
+    render(<AppHeader />);
+
+    expect(screen.getByRole('link', { name: '承認待ち' })).toHaveAttribute(
+      'href',
+      '/approvals',
+    );
+  });
 });

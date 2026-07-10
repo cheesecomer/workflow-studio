@@ -3,8 +3,10 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import {
+  approveSubmission,
   createSubmission,
   deleteSubmission,
+  rejectSubmission,
   submitSubmission,
   updateSubmission,
   withdrawSubmission,
@@ -123,4 +125,33 @@ export async function deleteSubmissionAction(id: string): Promise<void> {
   await deleteSubmission(id);
   revalidatePath('/submissions');
   redirect('/submissions');
+}
+
+function commentFrom(formData: FormData): string | undefined {
+  const comment = formData.get('comment');
+  return typeof comment === 'string' && comment.trim() !== ''
+    ? comment
+    : undefined;
+}
+
+export async function approveSubmissionAction(
+  id: string,
+  formData: FormData,
+): Promise<void> {
+  await approveSubmission(id, commentFrom(formData));
+  revalidatePath('/submissions');
+  revalidatePath(`/submissions/${id}`);
+  revalidatePath('/approvals');
+  redirect(`/submissions/${id}`);
+}
+
+export async function rejectSubmissionAction(
+  id: string,
+  formData: FormData,
+): Promise<void> {
+  await rejectSubmission(id, commentFrom(formData));
+  revalidatePath('/submissions');
+  revalidatePath(`/submissions/${id}`);
+  revalidatePath('/approvals');
+  redirect(`/submissions/${id}`);
 }
