@@ -1,10 +1,15 @@
-import { render, screen } from '@testing-library/react';
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`REDIRECT:${url}`);
+  }),
+}));
+
+import { redirect } from 'next/navigation';
 import Home from './page';
 
 describe('Home', () => {
-  it('renders page', () => {
-    render(<Home />);
-
-    expect(screen.getByRole('main')).toBeInTheDocument();
+  it('redirects to the submission list', () => {
+    expect(() => Home()).toThrow('REDIRECT:/submissions');
+    expect(redirect).toHaveBeenCalledWith('/submissions');
   });
 });
