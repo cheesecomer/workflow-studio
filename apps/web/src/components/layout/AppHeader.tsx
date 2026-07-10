@@ -9,6 +9,9 @@ export function AppHeader() {
           <Link href="/submissions" className="hover:underline">
             申請一覧
           </Link>
+          <Link href="/approvals" className="hover:underline">
+            承認待ち
+          </Link>
           <Link href="/documents" className="hover:underline">
             申請書管理
           </Link>
